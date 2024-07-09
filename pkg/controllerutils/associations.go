@@ -20,7 +20,7 @@ import (
 )
 
 // DetermineShootsAssociatedTo gets a <shootLister> to determine the Shoots resources which are associated
-// to given <obj> (either a CloudProfile, Seed, Secretbinding, CredentialsBinding or a ExposureClass object).
+// to given <obj> (either a CloudProfile, NamespacedCloudProfile, Seed, Secretbinding, CredentialsBinding or a ExposureClass object).
 func DetermineShootsAssociatedTo(ctx context.Context, gardenClient client.Reader, obj any) ([]string, error) {
 	shootList := &gardencorev1beta1.ShootList{}
 	if err := gardenClient.List(ctx, shootList); err != nil {
@@ -37,6 +37,12 @@ func DetermineShootsAssociatedTo(ctx context.Context, gardenClient client.Reader
 				(shoot.Spec.CloudProfile != nil &&
 					shoot.Spec.CloudProfile.Kind == constants.CloudProfileReferenceKindCloudProfile &&
 					shoot.Spec.CloudProfile.Name == cloudProfile.Name) {
+				associatedShoots = append(associatedShoots, fmt.Sprintf("%s/%s", shoot.Namespace, shoot.Name))
+			}
+		case *gardencorev1beta1.NamespacedCloudProfile:
+			namespacedCloudProfile := obj.(*gardencorev1beta1.NamespacedCloudProfile)
+			if shoot.Spec.CloudProfile != nil && shoot.Spec.CloudProfile.Kind == constants.CloudProfileReferenceKindNamespacedCloudProfile &&
+				shoot.Spec.CloudProfile.Name == namespacedCloudProfile.Name {
 				associatedShoots = append(associatedShoots, fmt.Sprintf("%s/%s", shoot.Namespace, shoot.Name))
 			}
 		case *gardencorev1beta1.Seed:

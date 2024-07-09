@@ -26,6 +26,11 @@ var _ = Describe("Shoot Tests", Label("Shoot", "default"), func() {
 			By("Create Shoot")
 			ctx, cancel := context.WithTimeout(parentCtx, 15*time.Minute)
 			defer cancel()
+
+			if shoot.Spec.CloudProfileName == nil && shoot.Spec.CloudProfile != nil && shoot.Spec.CloudProfile.Kind == "NamespacedCloudProfile" {
+				Expect(f.GardenClient.Client().Create(ctx, e2e.DefaultNamespacedCloudProfile())).To(Succeed())
+			}
+
 			Expect(f.CreateShootAndWaitForCreation(ctx, false)).To(Succeed())
 			f.Verify()
 
@@ -62,5 +67,14 @@ var _ = Describe("Shoot Tests", Label("Shoot", "default"), func() {
 
 	Context("Workerless Shoot", Label("workerless"), func() {
 		test(e2e.DefaultWorkerlessShoot("e2e-wake-up"))
+	})
+
+	Context("Shoot with NamespacedCloudProfile", Label("basic"), func() {
+		shoot := e2e.DefaultShoot("e2e-wake-up")
+		shoot.Spec.CloudProfile = &gardencorev1beta1.CloudProfileReference{
+			Kind: "NamespacedCloudProfile",
+			Name: "my-profile",
+		}
+		test(shoot)
 	})
 })

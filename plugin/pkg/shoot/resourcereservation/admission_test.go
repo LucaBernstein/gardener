@@ -59,6 +59,7 @@ var _ = Describe("resourcereservation", func() {
 			namespace       string = "test"
 			machineTypeName string = "n1-standard-2"
 
+			// TODO(LucaBernstein): Add also cases for nscpfl?
 			cloudProfileBase = gardencorev1beta1.CloudProfile{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "profile",

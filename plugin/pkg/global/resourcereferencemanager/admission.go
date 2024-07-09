@@ -452,6 +452,7 @@ func (r *ReferenceManager) Admit(ctx context.Context, a admission.Attributes, _ 
 		}
 		err = r.ensureBackupEntryReferences(oldBackupEntry, backupEntry)
 
+	// TODO(LucaBernstein): Similar logic is also needed for NamespacedCloudProfiles --> CHanges must be compared to current usages
 	case core.Kind("CloudProfile"):
 		cloudProfile, ok := a.GetObject().(*core.CloudProfile)
 		if !ok {
@@ -515,7 +516,10 @@ func (r *ReferenceManager) Admit(ctx context.Context, a admission.Attributes, _ 
 						cloudProfileName = *s.Spec.CloudProfileName
 					}
 
-					if s.DeletionTimestamp != nil || cloudProfile.Name != cloudProfileName {
+					if s.DeletionTimestamp != nil ||
+						(cloudProfile.Name != cloudProfileName ||
+							s.Spec.CloudProfile != nil && s.Spec.CloudProfile.Kind == v1beta1constants.CloudProfileReferenceKindCloudProfile && s.Spec.CloudProfile.Name != cloudProfile.Name) {
+						// TODO(LucaBernstein): This logic has also to be applied accordingly for nscp admission flow once implemented (see also TODO below).
 						wg.Done()
 						continue
 					}
@@ -553,6 +557,8 @@ func (r *ReferenceManager) Admit(ctx context.Context, a admission.Attributes, _ 
 				}
 			}
 		}
+
+	// TODO(LucaBernstein): Also implement admission for NamespacedCloudProfile?
 
 	case core.Kind("ControllerRegistration"):
 		controllerRegistration, ok := a.GetObject().(*core.ControllerRegistration)

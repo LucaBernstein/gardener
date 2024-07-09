@@ -146,6 +146,14 @@ var _ = Describe("Admission", func() {
 
 			Expect(admissionHandler.Validate(ctx, attrs, nil)).To(Succeed())
 		})
+
+		It("should fail for creating a NamespacedCloudProfile that defines a kubernetes version not in the parent CloudProfile", func() {
+			Expect(false).To(BeTrue())
+		})
+
+		It("should allow creating a NamespacedCloudProfile that overrides a kubernetes version from the parent CloudProfile and extends the validity", func() {
+			Expect(false).To(BeTrue())
+		})
 	})
 
 	Describe("#Register", func() {

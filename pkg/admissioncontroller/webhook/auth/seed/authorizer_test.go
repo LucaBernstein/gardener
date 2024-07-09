@@ -504,6 +504,56 @@ var _ = Describe("Seed", func() {
 				})
 			})
 
+			Context("when requested for NamespacedCloudProfiles", func() {
+				var (
+					namespacedCloudProfileName, namespace string
+					attrs                                 *auth.AttributesRecord
+				)
+
+				BeforeEach(func() {
+					namespacedCloudProfileName = "fooCloud"
+					namespace = "bar"
+					attrs = &auth.AttributesRecord{
+						User:            seedUser,
+						Name:            namespacedCloudProfileName,
+						Namespace:       namespace,
+						APIGroup:        gardencorev1beta1.SchemeGroupVersion.Group,
+						Resource:        "namespacedcloudprofiles",
+						ResourceRequest: true,
+						Verb:            "get",
+					}
+				})
+
+				DescribeTable("should return correct result if verb is always allowed",
+					func(verb string) {
+						attrs.Verb = verb
+
+						decision, reason, err := authorizer.Authorize(ctx, attrs)
+						Expect(err).NotTo(HaveOccurred())
+						Expect(decision).To(Equal(auth.DecisionAllow))
+						Expect(reason).To(BeEmpty())
+					},
+
+					Entry("get", "get"),
+					Entry("list", "list"),
+					Entry("watch", "watch"),
+					Entry("create", "create"),
+					Entry("update", "update"),
+					Entry("delete", "delete"),
+				)
+
+				DescribeTable("should have no opinion because no allowed verb", func(verb string) {
+					attrs.Verb = verb
+					decision, reason, err := authorizer.Authorize(ctx, attrs)
+
+					Expect(err).NotTo(HaveOccurred())
+					Expect(decision).To(Equal(auth.DecisionNoOpinion))
+					Expect(reason).To(ContainSubstring("only the following verbs are allowed for this resource type: [create update patch delete get list watch]"))
+				},
+					Entry("deletecollection", "deletecollection"),
+				)
+			})
+
 			Context("when requested for Namespaces", func() {
 				var (
 					name  string

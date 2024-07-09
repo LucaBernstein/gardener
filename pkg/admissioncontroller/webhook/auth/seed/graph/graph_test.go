@@ -195,6 +195,10 @@ var _ = Describe("graph", func() {
 			},
 			Spec: gardencorev1beta1.ShootSpec{
 				CloudProfileName: ptr.To("cloudprofile1"),
+				CloudProfile: &gardencorev1beta1.CloudProfileReference{
+					Name: "cloudprofile1",
+					Kind: "CloudProfile",
+				},
 				DNS: &gardencorev1beta1.DNS{
 					Providers: []gardencorev1beta1.DNSProvider{shoot1DNSProvider1, shoot1DNSProvider2},
 				},
@@ -446,7 +450,9 @@ yO57qEcJqG1cB7iSchFuCSTuDBbZlN0fXgn4YjiWZyb4l3BDp3rm4iJImA==
 		Expect(graph.graph.Nodes().Len()).To(Equal(20))
 		Expect(graph.graph.Edges().Len()).To(Equal(19))
 		Expect(graph.HasPathFrom(VertexTypeNamespace, "", shoot1.Namespace, VertexTypeShoot, shoot1.Namespace, shoot1.Name)).To(BeTrue())
+		// TODO(LucaBernstein): This test might also require rework to adapt to nscpfl
 		Expect(graph.HasPathFrom(VertexTypeCloudProfile, "", *shoot1.Spec.CloudProfileName, VertexTypeShoot, shoot1.Namespace, shoot1.Name)).To(BeTrue())
+		Expect(graph.HasPathFrom(VertexTypeNamespacedCloudProfile, "", shoot1.Spec.CloudProfile.Name, VertexTypeShoot, shoot1.Namespace, shoot1.Name)).To(BeTrue())
 		Expect(graph.HasPathFrom(VertexTypeSecretBinding, shoot1.Namespace, *shoot1.Spec.SecretBindingName, VertexTypeShoot, shoot1.Namespace, shoot1.Name)).To(BeTrue())
 		Expect(graph.HasPathFrom(VertexTypeCredentialsBinding, shoot1.Namespace, *shoot1.Spec.CredentialsBindingName, VertexTypeShoot, shoot1.Namespace, shoot1.Name)).To(BeTrue())
 		Expect(graph.HasPathFrom(VertexTypeConfigMap, shoot1.Namespace, shoot1AuditPolicyConfigMapRef.Name, VertexTypeShoot, shoot1.Namespace, shoot1.Name)).To(BeTrue())

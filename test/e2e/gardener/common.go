@@ -65,7 +65,9 @@ func DefaultShoot(name string) *gardencorev1beta1.Shoot {
 			ControlPlane:      getShootControlPlane(),
 			Region:            "local",
 			SecretBindingName: ptr.To("local"),
-			CloudProfileName:  ptr.To("local"),
+			CloudProfile: &gardencorev1beta1.CloudProfileReference{
+				Name: "local",
+			},
 			Kubernetes: gardencorev1beta1.Kubernetes{
 				Version:                     "1.30.0",
 				EnableStaticTokenKubeconfig: ptr.To(false),
@@ -168,6 +170,25 @@ func SetupDNSForMultiZoneTest() {
 			// We use tcp to distinguish easily in-cluster requests (done via udp) and requests from
 			// the tests (using tcp). The result for cluster api names differ depending on the source.
 			return dialer.DialContext(ctx, "tcp", "127.0.0.1:5353")
+		},
+	}
+}
+
+// DefaultNamespacedCloudProfile returns a NamespacedCloudProfile object with default values for the e2e tests.
+func DefaultNamespacedCloudProfile() *gardencorev1beta1.NamespacedCloudProfile {
+	return &gardencorev1beta1.NamespacedCloudProfile{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "my-profile",
+			Namespace: "garden-local",
+		},
+		Spec: gardencorev1beta1.NamespacedCloudProfileSpec{
+			Parent: gardencorev1beta1.CloudProfileReference{
+				Kind: "CloudProfile",
+				Name: "local",
+			},
+			Regions: []gardencorev1beta1.Region{
+				{Name: "test-region123"},
+			},
 		},
 	}
 }

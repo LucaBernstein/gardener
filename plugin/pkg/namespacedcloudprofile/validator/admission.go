@@ -134,6 +134,10 @@ func (v *ValidateNamespacedCloudProfile) Validate(_ context.Context, a admission
 		return err
 	}
 
+	if err := validationContext.validateKubernetesVersions(a); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -172,4 +176,11 @@ func isMachineTypePresentInNamespacedCloudProfile(machineType gardencore.Machine
 		}
 	}
 	return false
+}
+
+// TODO(LUcaBernstein): Validate Kubernetes versions that the list can only be enlonged
+// TODO(LUcaBernstein): Also validate, that Kubernetes versions only extend and overwrite CloudProfile versions (e.g. enlong the expiration date)
+
+func (c *validationContext) validateKubernetesVersions(_ admission.Attributes) error {
+	return fmt.Errorf("not implemented yed")
 }

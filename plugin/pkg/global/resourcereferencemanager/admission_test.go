@@ -1567,6 +1567,29 @@ var _ = Describe("resourcereferencemanager", func() {
 			})
 		})
 
+		// TODO(LucaBernstein): Add test cases for NamespacedCloudProfiles and/or kubernetes versions:
+		//  - success: not overriding any kubernetes versions
+		//  - success: overriding a k8s version not used
+		//  - success: extending the validity of a k8s version used -- Q LUca: What happens if a shoot's kubernetes version falls out of supported range?
+		//  - success: extending the validity of a used but formerly outdated k8s version and is now supported again
+		//  - failure/success?: extending the validity of a used but formerly outdated k8s version and is now still not supported anymore
+		//     - reasoning: A shoot using an outdated version should not block general modifications to the NamespacedCloudProfile (?)
+		//     - reasoning otherwise: it makes little sense to patch a NamespacedCloudProfile and expect a already outdated k8s version to be set
+		//     - maybe otherwise: overriding k8s versions to be already outdated right now should maybe not be supported?
+		//  - failure: removing a lifetime extending override and thus a shoot becoming unsupported now
+		//  - failure: adding a k8s version that is not in the parent CloudProfile (i.e. adding new instead of overriding)
+		//  - success: adding a new {MachineImage, machineTypes, volumeTypes} version
+		//  - failure: specifying a duplicate {MachineImage, machineTypes, volumeTypes} version, that is already present in the parent CloudProfile
+		//  - success: removing a kubernetes version override that is still in the parent cloud profile
+		//  - failure: removing a k8s version from a CloudProfile that is still overridden in a NamespacedCloudProfile
+
+		// TODO(LucaBernstein): Not sure whether to be added to this test context as well, but somewhere (or find already existing...):
+		//  - updates to CLoudProfile trigger recalculation of descending NamespacedCloudProfile Status (but only those, no other - if possible to test --> targetign selector)
+		//  - creation of NamespacedCloudProfile triggers calculation of Status
+		//  - updates to NamespacedCloudProfile trigger recalculation of Status
+		//  - Creating a Shoot referencing a outdated Kubernetes version from a {CloudProfile, NamespacedCloudProfile} should FAIL
+		//  - Creating a Shoot referencing a Kubernetes version that is extended by a NamespacedCloudProfile k8s override should work
+
 		Context("CloudProfile - Update Machine image versions", func() {
 			versions := []core.MachineImageVersion{
 				{

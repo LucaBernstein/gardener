@@ -17,7 +17,8 @@ func ValidateNamespacedCloudProfile(cloudProfile *core.NamespacedCloudProfile) f
 	allErrs := field.ErrorList{}
 
 	allErrs = append(allErrs, apivalidation.ValidateObjectMeta(&cloudProfile.ObjectMeta, true, ValidateName, field.NewPath("metadata"))...)
-	allErrs = append(allErrs, validateNamespacedCloudProfileSpec(&cloudProfile.Spec, field.NewPath("spec"))...)
+	allErrs = append(allErrs, validateParent(cloudProfile.Spec.Parent, field.NewPath("spec.parent"))...)
+	allErrs = append(allErrs, ValidateNamespacedCloudProfileStatus(&cloudProfile.Status.CloudProfileSpec, field.NewPath("status.cloudProfileSpec"))...)
 
 	return allErrs
 }
@@ -42,15 +43,11 @@ func ValidateNamespacedCloudProfileSpecUpdate(oldProfile, newProfile *core.Names
 	return allErrs
 }
 
-// validateNamespacedCloudProfileSpec validates the specification of a NamespacedCloudProfile object.
-func validateNamespacedCloudProfileSpec(spec *core.NamespacedCloudProfileSpec, fldPath *field.Path) field.ErrorList {
+// ValidateNamespacedCloudProfileStatus validates the specification of a NamespacedCloudProfile object.
+func ValidateNamespacedCloudProfileStatus(spec *core.CloudProfileSpec, fldPath *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
 
-	allErrs = append(allErrs, validateParent(spec.Parent, fldPath.Child("parent"))...)
-
-	if spec.Kubernetes != nil {
-		allErrs = append(allErrs, validateKubernetesSettings(*spec.Kubernetes, fldPath.Child("kubernetes"))...)
-	}
+	allErrs = append(allErrs, validateKubernetesSettings(spec.Kubernetes, fldPath.Child("kubernetes"))...)
 	if spec.MachineImages != nil {
 		allErrs = append(allErrs, validateMachineImages(spec.MachineImages, fldPath.Child("machineImages"))...)
 	}

@@ -7,13 +7,12 @@ package namespacedcloudprofile
 import (
 	"context"
 	"fmt"
+	"github.com/gardener/gardener/plugin/pkg/utils"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/tools/record"
-	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -103,24 +102,8 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 }
 
 func patchCloudProfileStatus(ctx context.Context, c client.Client, namespacedCloudProfile *gardencorev1beta1.NamespacedCloudProfile, parentCloudProfile *gardencorev1beta1.CloudProfile) error {
-	patch := client.StrategicMergeFrom(namespacedCloudProfile.DeepCopy())
-	mergeCloudProfiles(parentCloudProfile.DeepCopy(), namespacedCloudProfile)
+	patch := client.StrategicMergeFrom(namespacedCloudProfile)
+	utils.MergeCloudProfiles(parentCloudProfile, namespacedCloudProfile)
 	namespacedCloudProfile.Status.CloudProfileSpec = parentCloudProfile.Spec
 	return c.Patch(ctx, namespacedCloudProfile, patch)
-}
-
-func mergeCloudProfiles(resultingCloudProfile *gardencorev1beta1.CloudProfile, namespacedCloudProfile *gardencorev1beta1.NamespacedCloudProfile) {
-	resultingCloudProfile.ObjectMeta = metav1.ObjectMeta{}
-	if namespacedCloudProfile.Spec.Kubernetes != nil {
-		// TODO: Override parent k8s versions if duplicate (?)
-		resultingCloudProfile.Spec.Kubernetes.Versions = append(resultingCloudProfile.Spec.Kubernetes.Versions, namespacedCloudProfile.Spec.Kubernetes.Versions...)
-	}
-	resultingCloudProfile.Spec.MachineImages = append(resultingCloudProfile.Spec.MachineImages, namespacedCloudProfile.Spec.MachineImages...)
-	resultingCloudProfile.Spec.MachineTypes = append(resultingCloudProfile.Spec.MachineTypes, namespacedCloudProfile.Spec.MachineTypes...)
-	resultingCloudProfile.Spec.Regions = append(resultingCloudProfile.Spec.Regions, namespacedCloudProfile.Spec.Regions...)
-	resultingCloudProfile.Spec.VolumeTypes = append(resultingCloudProfile.Spec.VolumeTypes, namespacedCloudProfile.Spec.VolumeTypes...)
-	if namespacedCloudProfile.Spec.CABundle != nil {
-		mergedCABundles := fmt.Sprintf("%s%s", ptr.Deref(resultingCloudProfile.Spec.CABundle, ""), ptr.Deref(namespacedCloudProfile.Spec.CABundle, ""))
-		resultingCloudProfile.Spec.CABundle = &mergedCABundles
-	}
 }

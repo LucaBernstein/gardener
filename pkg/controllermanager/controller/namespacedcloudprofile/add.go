@@ -17,6 +17,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
+	"github.com/gardener/gardener/pkg/controllerutils"
 	"github.com/gardener/gardener/pkg/controllerutils/mapper"
 )
 
@@ -56,12 +57,10 @@ func (r *Reconciler) MapCloudProfileToNamespacedCloudProfile(ctx context.Context
 	if !ok {
 		return nil
 	}
-
-	namespacedCloudProfileList := &gardencorev1beta1.NamespacedCloudProfileList{}
-	if err := r.Client.List(ctx, namespacedCloudProfileList, client.MatchingFields{"spec.parent": cloudProfile.Name}); err != nil {
+	namespacedCloudProfileList, err := controllerutils.GetNamespacedCloudProfilesReferencingCloudProfile(ctx, r.Client, cloudProfile.Name)
+	if err != nil {
 		log.Error(err, "Failed to list namespacedcloudprofiles referencing this cloudprofile", "cloudProfileName", cloudProfile.Name)
 		return nil
 	}
-
 	return mapper.ObjectListToRequests(namespacedCloudProfileList)
 }

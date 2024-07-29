@@ -8,7 +8,7 @@ package v1beta1
 
 import (
 	"context"
-	time "time"
+	"time"
 
 	corev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	versioned "github.com/gardener/gardener/pkg/client/core/clientset/versioned"

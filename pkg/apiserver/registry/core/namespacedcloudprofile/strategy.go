@@ -6,6 +6,7 @@ package namespacedcloudprofile
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
@@ -15,7 +16,6 @@ import (
 
 	"github.com/gardener/gardener/pkg/api"
 	"github.com/gardener/gardener/pkg/apis/core"
-	"github.com/gardener/gardener/pkg/apis/core/validation"
 )
 
 type namespacedCloudProfileStrategy struct {
@@ -39,8 +39,11 @@ func (namespacedCloudProfileStrategy) PrepareForCreate(_ context.Context, obj ru
 }
 
 func (namespacedCloudProfileStrategy) Validate(_ context.Context, obj runtime.Object) field.ErrorList {
-	namespacedCloudProfile := obj.(*core.NamespacedCloudProfile)
-	return validation.ValidateNamespacedCloudProfile(namespacedCloudProfile)
+	fmt.Printf("Luca: Validate() would have been called here")
+	return nil
+	// TODO(LucaBernstein): The following validation method is also called in core validation later - also makes much more sense there
+	//namespacedCloudProfile := obj.(*core.NamespacedCloudProfile)
+	//return validation.ValidateNamespacedCloudProfile(namespacedCloudProfile)
 }
 
 func (namespacedCloudProfileStrategy) Canonicalize(_ runtime.Object) {
@@ -78,8 +81,11 @@ func (namespacedCloudProfileStrategy) AllowUnconditionalUpdate() bool {
 }
 
 func (namespacedCloudProfileStrategy) ValidateUpdate(_ context.Context, newObj, oldObj runtime.Object) field.ErrorList {
-	oldProfile, newProfile := oldObj.(*core.NamespacedCloudProfile), newObj.(*core.NamespacedCloudProfile)
-	return validation.ValidateNamespacedCloudProfileUpdate(newProfile, oldProfile)
+	fmt.Printf("Luca: ValidateUpdate() would have been called here")
+	return nil
+	//oldProfile, newProfile := oldObj.(*core.NamespacedCloudProfile), newObj.(*core.NamespacedCloudProfile)
+	// TODO(LucaBernstein): The following validation method is also called in core validation later - also makes much more sense there
+	//return validation.ValidateNamespacedCloudProfileUpdate(newProfile, oldProfile)
 }
 
 // WarningsOnCreate returns warnings to the client performing the create.
@@ -128,9 +134,10 @@ type namespacedCloudProfileStatusStrategy struct {
 var StatusStrategy = namespacedCloudProfileStatusStrategy{Strategy}
 
 func (namespacedCloudProfileStatusStrategy) PrepareForUpdate(_ context.Context, obj, old runtime.Object) {
-	newNamespacedCloudProfile := obj.(*core.NamespacedCloudProfile)
-	oldNamespacedCloudProfile := old.(*core.NamespacedCloudProfile)
-	newNamespacedCloudProfile.Spec = oldNamespacedCloudProfile.Spec
+	fmt.Printf("Luca: Normally, I would have overwritten the nscpfl spec here in the prepareForUpdate strategy.\n")
+	//newNamespacedCloudProfile := obj.(*core.NamespacedCloudProfile)
+	//oldNamespacedCloudProfile := old.(*core.NamespacedCloudProfile)
+	//newNamespacedCloudProfile.Spec = oldNamespacedCloudProfile.Spec
 }
 
 func (namespacedCloudProfileStatusStrategy) ValidateUpdate(_ context.Context, _, _ runtime.Object) field.ErrorList {

@@ -11,6 +11,7 @@ import (
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apiserver/pkg/admission"
+	"k8s.io/utils/ptr"
 
 	gardencore "github.com/gardener/gardener/pkg/apis/core"
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
@@ -147,13 +148,60 @@ var _ = Describe("Admission", func() {
 			Expect(admissionHandler.Validate(ctx, attrs, nil)).To(Succeed())
 		})
 
-		It("should fail for creating a NamespacedCloudProfile that defines a kubernetes version not in the parent CloudProfile", func() {
-			Expect(false).To(BeTrue())
+		It("should allow creating a NamespacedCloudProfile that specifies a Kubernetes version from the parent CloudProfile and extends the expiration date", func() {
+			parentCloudProfile.Spec.Kubernetes = gardencorev1beta1.KubernetesSettings{Versions: []gardencorev1beta1.ExpirableVersion{
+				{Version: "1.30.0"},
+			}}
+			Expect(coreInformerFactory.Core().V1beta1().CloudProfiles().Informer().GetStore().Add(&parentCloudProfile)).To(Succeed())
+
+			namespacedCloudProfile.Spec.Parent = namespacedCloudProfileParent
+			namespacedCloudProfile.Spec.Kubernetes = &gardencore.KubernetesSettings{Versions: []gardencore.ExpirableVersion{
+				{Version: "1.30.0", ExpirationDate: ptr.To(metav1.Now())},
+			}}
+
+			attrs := admission.NewAttributesRecord(&namespacedCloudProfile, nil, gardencorev1beta1.Kind("NamespacedCloudProfile").WithVersion("version"), "", namespacedCloudProfile.Name, gardencorev1beta1.Resource("namespacedcloudprofile").WithVersion("version"), "", admission.Create, &metav1.CreateOptions{}, false, nil)
+
+			Expect(admissionHandler.Validate(ctx, attrs, nil)).To(Succeed())
 		})
 
-		It("should allow creating a NamespacedCloudProfile that overrides a kubernetes version from the parent CloudProfile and extends the validity", func() {
-			Expect(false).To(BeTrue())
+		It("should fail for creating a NamespacedCloudProfile that specifies a Kubernetes version from the parent CloudProfile but does not set an expiration date", func() {
+			parentCloudProfile.Spec.Kubernetes = gardencorev1beta1.KubernetesSettings{Versions: []gardencorev1beta1.ExpirableVersion{
+				{Version: "1.30.0"},
+			}}
+			Expect(coreInformerFactory.Core().V1beta1().CloudProfiles().Informer().GetStore().Add(&parentCloudProfile)).To(Succeed())
+
+			namespacedCloudProfile.Spec.Parent = namespacedCloudProfileParent
+			namespacedCloudProfile.Spec.Kubernetes = &gardencore.KubernetesSettings{Versions: []gardencore.ExpirableVersion{
+				{Version: "1.30.0"},
+			}}
+
+			attrs := admission.NewAttributesRecord(&namespacedCloudProfile, nil, gardencorev1beta1.Kind("NamespacedCloudProfile").WithVersion("version"), "", namespacedCloudProfile.Name, gardencorev1beta1.Resource("namespacedcloudprofile").WithVersion("version"), "", admission.Create, &metav1.CreateOptions{}, false, nil)
+
+			Expect(admissionHandler.Validate(ctx, attrs, nil)).To(MatchError(ContainSubstring("specified version '1.30.0' does not set expiration date")))
 		})
+
+		It("should fail for creating a NamespacedCloudProfile that specifies a Kubernetes version not in the parent CloudProfile", func() {
+			parentCloudProfile.Spec.Kubernetes = gardencorev1beta1.KubernetesSettings{Versions: []gardencorev1beta1.ExpirableVersion{
+				{Version: "1.29.0"},
+			}}
+			Expect(coreInformerFactory.Core().V1beta1().CloudProfiles().Informer().GetStore().Add(&parentCloudProfile)).To(Succeed())
+
+			namespacedCloudProfile.Spec.Parent = namespacedCloudProfileParent
+			namespacedCloudProfile.Spec.Kubernetes = &gardencore.KubernetesSettings{Versions: []gardencore.ExpirableVersion{
+				{Version: "1.30.0", ExpirationDate: ptr.To(metav1.Now())},
+			}}
+
+			attrs := admission.NewAttributesRecord(&namespacedCloudProfile, nil, gardencorev1beta1.Kind("NamespacedCloudProfile").WithVersion("version"), "", namespacedCloudProfile.Name, gardencorev1beta1.Resource("namespacedcloudprofile").WithVersion("version"), "", admission.Create, &metav1.CreateOptions{}, false, nil)
+
+			Expect(admissionHandler.Validate(ctx, attrs, nil)).To(MatchError(ContainSubstring("invalid version specified: '1.30.0' does not exist in parent")))
+		})
+
+		// TODO(LucaBernstein): NamespacedCLoudProfile machineImages
+		//  - new versions may be added without expiration date
+		//  - new versions may be added with expiration date
+		//  - existing versions expiration date may be overridden
+		//  - Q: May new categories of machine images be added?
+		//  - Q: Should checks on the specified expiration dates be performed (e.g. only extend, not reduce)?
 	})
 
 	Describe("#Register", func() {

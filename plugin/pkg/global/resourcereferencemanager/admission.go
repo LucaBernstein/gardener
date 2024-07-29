@@ -725,7 +725,7 @@ func (r *ReferenceManager) ensureBindingReferences(ctx context.Context, attribut
 }
 
 func (r *ReferenceManager) ensureShootReferences(ctx context.Context, attributes admission.Attributes, oldShoot, shoot *core.Shoot) error {
-	if !equality.Semantic.DeepEqual(oldShoot.Spec.CloudProfileName, shoot.Spec.CloudProfileName) {
+	if utils.BuildCloudProfileReference(shoot) != utils.BuildCloudProfileReference(oldShoot) {
 		if _, err := utils.GetCloudProfileSpec(r.cloudProfileLister, r.namespacedCloudProfileLister, shoot); err != nil {
 			return fmt.Errorf("could not find cloudProfileSpec from the shoot cloudProfile reference: %s", err.Error())
 		}

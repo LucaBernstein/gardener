@@ -8,10 +8,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/gardener/gardener/pkg/api"
+	"github.com/gardener/gardener/pkg/apis/core/validation"
+	"github.com/gardener/gardener/plugin/pkg/utils"
 	"io"
+	"k8s.io/apimachinery/pkg/util/validation/field"
 	"reflect"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apiserver/pkg/admission"
 
 	gardencore "github.com/gardener/gardener/pkg/apis/core"
@@ -130,13 +135,22 @@ func (v *ValidateNamespacedCloudProfile) Validate(_ context.Context, a admission
 		oldNamespacedCloudProfile: oldNamespacedCloudProfile,
 	}
 
+	fmt.Printf("Luca: starting admission validation Validate()\n")
+
 	if err := validationContext.validateMachineTypes(a); err != nil {
+		fmt.Printf("Luca: error in admission validation Validate() #1 - %+v\n", err)
+		return err
+	}
+	if err := validationContext.validateKubernetesVersionOverrides(a); err != nil {
+		fmt.Printf("Luca: error in admission validation Validate() #2 - %+v\n", err)
+		return err
+	}
+	if err := validationContext.validateSimulatedCloudProfileMergeResult(a); err != nil {
+		fmt.Printf("Luca: error in admission validation Validate() #3 - %+v\n", err)
 		return err
 	}
 
-	if err := validationContext.validateKubernetesVersions(a); err != nil {
-		return err
-	}
+	fmt.Printf("Luca: successfully ended admission validation Validate()")
 
 	return nil
 }
@@ -178,9 +192,40 @@ func isMachineTypePresentInNamespacedCloudProfile(machineType gardencore.Machine
 	return false
 }
 
-// TODO(LUcaBernstein): Validate Kubernetes versions that the list can only be enlonged
-// TODO(LUcaBernstein): Also validate, that Kubernetes versions only extend and overwrite CloudProfile versions (e.g. enlong the expiration date)
+func (c *validationContext) validateKubernetesVersionOverrides(_ admission.Attributes) error {
+	if c.namespacedCloudProfile.Spec.Kubernetes == nil {
+		return nil
+	}
+	parentVersions := make(map[string]*metav1.Time)
+	for _, parentVersion := range c.parentCloudProfile.Spec.Kubernetes.Versions {
+		parentVersions[parentVersion.Version] = parentVersion.ExpirationDate
+	}
+	for _, newVersion := range c.namespacedCloudProfile.Spec.Kubernetes.Versions {
+		//if newVersion.ExpirationDate == nil {
+		//	return fmt.Errorf("specified version '%s' does not set expiration date", newVersion.Version)
+		//}
+		if _, exists := parentVersions[newVersion.Version]; !exists {
+			return fmt.Errorf("invalid version specified: '%s' does not exist in parent CloudProfile and thus cannot be overridden", newVersion.Version)
+		}
+		// TODO(LucaBernstein): Is it necessary to do any date comparisons here with the original version against the override expiry date?
+	}
+	return nil
+}
 
-func (c *validationContext) validateKubernetesVersions(_ admission.Attributes) error {
-	return fmt.Errorf("not implemented yed")
+func (c *validationContext) validateSimulatedCloudProfileMergeResult(_ admission.Attributes) error {
+	coreNamespacedCloudProfile := &gardencorev1beta1.NamespacedCloudProfile{}
+	if err := api.Scheme.Convert(c.namespacedCloudProfile, coreNamespacedCloudProfile, nil); err != nil {
+		return err
+	}
+	alteredCloudProfile := c.parentCloudProfile.DeepCopy()
+	coreCloudProfile := &gardencore.CloudProfile{}
+	utils.MergeCloudProfiles(alteredCloudProfile, coreNamespacedCloudProfile)
+	if err := api.Scheme.Convert(alteredCloudProfile, coreCloudProfile, nil); err != nil {
+		return err
+	}
+	errs := validation.ValidateNamespacedCloudProfileStatus(&coreCloudProfile.Spec, field.NewPath("namespacedCloudProfile.status.cloudProfileSpec"))
+	if len(errs) > 0 {
+		return fmt.Errorf("error while validating merged NamespacedCloudProfile: %+v", errs)
+	}
+	return nil
 }

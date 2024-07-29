@@ -140,3 +140,12 @@ func determineAssociations(ctx context.Context, c client.Client, listObj client.
 	})
 	return associations, err
 }
+
+// GetNamespacedCloudProfilesReferencingCloudProfile determines the NamespacedCloudProfile resources which are associated to the given parent CloudProfile
+func GetNamespacedCloudProfilesReferencingCloudProfile(ctx context.Context, c client.Client, cloudProfileName string) (*gardencorev1beta1.NamespacedCloudProfileList, error) {
+	namespacedCloudProfileList := &gardencorev1beta1.NamespacedCloudProfileList{}
+	if err := c.List(ctx, namespacedCloudProfileList, client.MatchingFields{core.NamespacedCloudProfileParentRefName: cloudProfileName}); err != nil {
+		return nil, err
+	}
+	return namespacedCloudProfileList, nil
+}

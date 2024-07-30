@@ -18,7 +18,6 @@ func ValidateNamespacedCloudProfile(cloudProfile *core.NamespacedCloudProfile) f
 
 	allErrs = append(allErrs, apivalidation.ValidateObjectMeta(&cloudProfile.ObjectMeta, true, ValidateName, field.NewPath("metadata"))...)
 	allErrs = append(allErrs, validateParent(cloudProfile.Spec.Parent, field.NewPath("spec.parent"))...)
-	allErrs = append(allErrs, ValidateNamespacedCloudProfileStatus(&cloudProfile.Status.CloudProfileSpec, field.NewPath("status.cloudProfileSpec"))...)
 
 	return allErrs
 }

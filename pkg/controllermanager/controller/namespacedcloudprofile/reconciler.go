@@ -102,7 +102,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 }
 
 func patchCloudProfileStatus(ctx context.Context, c client.Client, namespacedCloudProfile *gardencorev1beta1.NamespacedCloudProfile, parentCloudProfile *gardencorev1beta1.CloudProfile) error {
-	patch := client.StrategicMergeFrom(namespacedCloudProfile)
+	patch := client.StrategicMergeFrom(namespacedCloudProfile.DeepCopy())
 	utils.MergeCloudProfiles(parentCloudProfile, namespacedCloudProfile)
 	namespacedCloudProfile.Status.CloudProfileSpec = parentCloudProfile.Spec
 	return c.Patch(ctx, namespacedCloudProfile, patch)

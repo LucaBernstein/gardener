@@ -135,22 +135,15 @@ func (v *ValidateNamespacedCloudProfile) Validate(_ context.Context, a admission
 		oldNamespacedCloudProfile: oldNamespacedCloudProfile,
 	}
 
-	fmt.Printf("Luca: starting admission validation Validate()\n")
-
 	if err := validationContext.validateMachineTypes(a); err != nil {
-		fmt.Printf("Luca: error in admission validation Validate() #1 - %+v\n", err)
 		return err
 	}
 	if err := validationContext.validateKubernetesVersionOverrides(a); err != nil {
-		fmt.Printf("Luca: error in admission validation Validate() #2 - %+v\n", err)
 		return err
 	}
-	if err := validationContext.validateSimulatedCloudProfileMergeResult(a); err != nil {
-		fmt.Printf("Luca: error in admission validation Validate() #3 - %+v\n", err)
+	if err := validationContext.validateSimulatedCloudProfileStatusMergeResult(a); err != nil {
 		return err
 	}
-
-	fmt.Printf("Luca: successfully ended admission validation Validate()")
 
 	return nil
 }
@@ -212,7 +205,7 @@ func (c *validationContext) validateKubernetesVersionOverrides(_ admission.Attri
 	return nil
 }
 
-func (c *validationContext) validateSimulatedCloudProfileMergeResult(_ admission.Attributes) error {
+func (c *validationContext) validateSimulatedCloudProfileStatusMergeResult(_ admission.Attributes) error {
 	coreNamespacedCloudProfile := &gardencorev1beta1.NamespacedCloudProfile{}
 	if err := api.Scheme.Convert(c.namespacedCloudProfile, coreNamespacedCloudProfile, nil); err != nil {
 		return err

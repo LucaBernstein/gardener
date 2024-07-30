@@ -151,43 +151,47 @@ func SyncCloudProfileFields(oldShoot, newShoot *core.Shoot) {
 // MergeCloudProfiles builds the cloud profile spec from a base CloudProfile and a NamespacedCloudProfile by updating the CloudProfile Spec inplace.
 // The CloudProfile Spec can then be used as NamespacedCloudProfile.Status.CloudProfileSpec value.
 func MergeCloudProfiles(resultingCloudProfile *gardencorev1beta1.CloudProfile, namespacedCloudProfile *gardencorev1beta1.NamespacedCloudProfile) {
-	fmt.Printf("Luca: MergeCloudProfiles() - resultingCloudProfile before: %v\n", resultingCloudProfile)
 	resultingCloudProfile.ObjectMeta = metav1.ObjectMeta{}
 	if namespacedCloudProfile.Spec.Kubernetes != nil {
-		existingKubernetesVersionsMap := versionsMap(resultingCloudProfile.Spec.Kubernetes)
-		for _, versionOverride := range namespacedCloudProfile.Spec.Kubernetes.Versions {
-			if _, exists := existingKubernetesVersionsMap[versionOverride.Version]; !exists {
-				continue
-			}
-			existingKubernetesVersionsMap[versionOverride.Version] = versionOverride
-		}
-		resultingCloudProfile.Spec.Kubernetes.Versions = versionsMapValues(existingKubernetesVersionsMap)
+		resultingCloudProfile.Spec.Kubernetes.Versions = merge(resultingCloudProfile.Spec.Kubernetes.Versions, namespacedCloudProfile.Spec.Kubernetes.Versions, func(v gardencorev1beta1.ExpirableVersion) string { return v.Version }, false)
 	}
 	resultingCloudProfile.Spec.MachineImages = append(resultingCloudProfile.Spec.MachineImages, namespacedCloudProfile.Spec.MachineImages...)
-	resultingCloudProfile.Spec.MachineTypes = append(resultingCloudProfile.Spec.MachineTypes, namespacedCloudProfile.Spec.MachineTypes...)
+	resultingCloudProfile.Spec.MachineTypes = merge(resultingCloudProfile.Spec.MachineTypes, namespacedCloudProfile.Spec.MachineTypes, func(machineType gardencorev1beta1.MachineType) string { return machineType.Name }, true)
 	resultingCloudProfile.Spec.Regions = append(resultingCloudProfile.Spec.Regions, namespacedCloudProfile.Spec.Regions...)
 	resultingCloudProfile.Spec.VolumeTypes = append(resultingCloudProfile.Spec.VolumeTypes, namespacedCloudProfile.Spec.VolumeTypes...)
 	if namespacedCloudProfile.Spec.CABundle != nil {
 		mergedCABundles := fmt.Sprintf("%s%s", ptr.Deref(resultingCloudProfile.Spec.CABundle, ""), ptr.Deref(namespacedCloudProfile.Spec.CABundle, ""))
 		resultingCloudProfile.Spec.CABundle = &mergedCABundles
 	}
-	fmt.Printf("Luca: MergeCloudProfiles() - resultingCloudProfile after: %v\n", resultingCloudProfile)
 }
 
-type versionsMapT map[string]gardencorev1beta1.ExpirableVersion
-
-func versionsMap(versions gardencorev1beta1.KubernetesSettings) versionsMapT {
-	mappedVersions := make(versionsMapT)
-	for _, version := range versions.Versions {
-		mappedVersions[version.Version] = version
+func values[T comparable](m map[string]T) []T {
+	var values []T
+	for _, version := range m {
+		values = append(values, version)
 	}
-	return mappedVersions
+	return values
 }
 
-func versionsMapValues(existingKubernetesVersionsMap versionsMapT) []gardencorev1beta1.ExpirableVersion {
-	var versions []gardencorev1beta1.ExpirableVersion
-	for _, version := range existingKubernetesVersionsMap {
-		versions = append(versions, version)
+func mapOf[T comparable](arr []T, keyFunc func(T) string) map[string]T {
+	mapped := make(map[string]T)
+	for _, value := range arr {
+		mapped[keyFunc(value)] = value
 	}
-	return versions
+	return mapped
+}
+
+func merge[T comparable](baseArr, override []T, keyFunc func(T) string, allowAdditional bool) []T {
+	existing := mapOf(baseArr, keyFunc)
+	for _, value := range override {
+		key := keyFunc(value)
+		if _, exists := existing[key]; !exists {
+			if allowAdditional {
+				existing[key] = value
+			}
+			continue
+		}
+		existing[key] = value
+	}
+	return values(existing)
 }

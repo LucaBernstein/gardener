@@ -155,7 +155,7 @@ func MergeCloudProfiles(resultingCloudProfile *gardencorev1beta1.CloudProfile, n
 	if namespacedCloudProfile.Spec.Kubernetes != nil {
 		resultingCloudProfile.Spec.Kubernetes.Versions = merge(resultingCloudProfile.Spec.Kubernetes.Versions, namespacedCloudProfile.Spec.Kubernetes.Versions, func(v gardencorev1beta1.ExpirableVersion) string { return v.Version }, false)
 	}
-	resultingCloudProfile.Spec.MachineImages = append(resultingCloudProfile.Spec.MachineImages, namespacedCloudProfile.Spec.MachineImages...)
+	resultingCloudProfile.Spec.MachineImages = merge(resultingCloudProfile.Spec.MachineImages, namespacedCloudProfile.Spec.MachineImages, func(image gardencorev1beta1.MachineImage) string { return image.Name }, false)
 	resultingCloudProfile.Spec.MachineTypes = merge(resultingCloudProfile.Spec.MachineTypes, namespacedCloudProfile.Spec.MachineTypes, func(machineType gardencorev1beta1.MachineType) string { return machineType.Name }, true)
 	resultingCloudProfile.Spec.Regions = append(resultingCloudProfile.Spec.Regions, namespacedCloudProfile.Spec.Regions...)
 	resultingCloudProfile.Spec.VolumeTypes = append(resultingCloudProfile.Spec.VolumeTypes, namespacedCloudProfile.Spec.VolumeTypes...)
@@ -165,7 +165,8 @@ func MergeCloudProfiles(resultingCloudProfile *gardencorev1beta1.CloudProfile, n
 	}
 }
 
-func values[T comparable](m map[string]T) []T {
+// Values converts the values of a map to an array.
+func Values[T any](m map[string]T) []T {
 	var values []T
 	for _, version := range m {
 		values = append(values, version)
@@ -173,16 +174,17 @@ func values[T comparable](m map[string]T) []T {
 	return values
 }
 
-func mapOf[T comparable](arr []T, keyFunc func(T) string) map[string]T {
-	mapped := make(map[string]T)
+// MapOf converts the values of an array to a map using a key function.
+func MapOf[T any](arr []T, keyFunc func(T) string) map[string]T {
+	mapped := make(map[string]T, len(arr))
 	for _, value := range arr {
 		mapped[keyFunc(value)] = value
 	}
 	return mapped
 }
 
-func merge[T comparable](baseArr, override []T, keyFunc func(T) string, allowAdditional bool) []T {
-	existing := mapOf(baseArr, keyFunc)
+func merge[T any](baseArr, override []T, keyFunc func(T) string, allowAdditional bool) []T {
+	existing := MapOf(baseArr, keyFunc)
 	for _, value := range override {
 		key := keyFunc(value)
 		if _, exists := existing[key]; !exists {
@@ -193,5 +195,5 @@ func merge[T comparable](baseArr, override []T, keyFunc func(T) string, allowAdd
 		}
 		existing[key] = value
 	}
-	return values(existing)
+	return Values(existing)
 }

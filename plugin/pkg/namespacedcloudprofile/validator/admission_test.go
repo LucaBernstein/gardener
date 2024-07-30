@@ -6,6 +6,7 @@ package validator_test
 
 import (
 	"context"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -31,7 +32,7 @@ var _ = Describe("Admission", func() {
 			parentCloudProfile           gardencorev1beta1.CloudProfile
 			machineType                  gardencorev1beta1.MachineType
 			machineTypeCore              gardencore.MachineType
-			machineImageCore             gardencore.MachineImage
+			//machineImageCore             gardencore.MachineImage
 
 			namespacedCloudProfileBase = gardencore.NamespacedCloudProfile{
 				ObjectMeta: metav1.ObjectMeta{
@@ -54,13 +55,13 @@ var _ = Describe("Admission", func() {
 				Name:         "my-machine",
 				Architecture: ptr.To("arm64"),
 			}
-			machineImageCoreBase = gardencore.MachineImage{
-				Name: "my-image",
-				Versions: []gardencore.MachineImageVersion{{
-					ExpirableVersion: gardencore.ExpirableVersion{Version: "1.0.0"},
-					CRI:              []gardencore.CRI{{Name: "containerd"}},
-				}},
-			}
+			//machineImageCoreBase = gardencore.MachineImage{
+			//	Name: "my-image",
+			//	Versions: []gardencore.MachineImageVersion{{
+			//		ExpirableVersion: gardencore.ExpirableVersion{Version: "1.0.0"},
+			//		CRI:              []gardencore.CRI{{Name: "containerd"}},
+			//	}},
+			//}
 		)
 
 		BeforeEach(func() {
@@ -74,7 +75,7 @@ var _ = Describe("Admission", func() {
 			parentCloudProfile = *parentCloudProfileBase.DeepCopy()
 			machineType = machineTypeBase
 			machineTypeCore = machineTypeCoreBase
-			machineImageCore = machineImageCoreBase
+			//machineImageCore = machineImageCoreBase
 
 			admissionHandler, _ = New()
 			admissionHandler.AssignReadyFunc(func() bool { return true })
@@ -82,135 +83,286 @@ var _ = Describe("Admission", func() {
 			admissionHandler.SetCoreInformerFactory(coreInformerFactory)
 		})
 
-		It("should not allow creating a NamespacedCloudProfile with an invalid parent reference", func() {
-			namespacedCloudProfile.Spec.Parent = gardencore.CloudProfileReference{Kind: "CloudProfile", Name: "idontexist"}
+		Describe("parent", func() {
+			It("should not allow creating a NamespacedCloudProfile with an invalid parent reference", func() {
+				namespacedCloudProfile.Spec.Parent = gardencore.CloudProfileReference{Kind: "CloudProfile", Name: "idontexist"}
 
-			attrs := admission.NewAttributesRecord(&namespacedCloudProfile, nil, gardencorev1beta1.Kind("NamespacedCloudProfile").WithVersion("version"), "", namespacedCloudProfile.Name, gardencorev1beta1.Resource("namespacedcloudprofile").WithVersion("version"), "", admission.Create, &metav1.CreateOptions{}, false, nil)
+				attrs := admission.NewAttributesRecord(&namespacedCloudProfile, nil, gardencorev1beta1.Kind("NamespacedCloudProfile").WithVersion("version"), "", namespacedCloudProfile.Name, gardencorev1beta1.Resource("namespacedcloudprofile").WithVersion("version"), "", admission.Create, &metav1.CreateOptions{}, false, nil)
 
-			Expect(admissionHandler.Validate(ctx, attrs, nil)).To(MatchError(ContainSubstring("parent CloudProfile could not be found")))
+				Expect(admissionHandler.Validate(ctx, attrs, nil)).To(MatchError(ContainSubstring("parent CloudProfile could not be found")))
+			})
+
+			It("should allow creating a NamespacedCloudProfile with a valid parent reference", func() {
+				Expect(coreInformerFactory.Core().V1beta1().CloudProfiles().Informer().GetStore().Add(&parentCloudProfile)).To(Succeed())
+
+				namespacedCloudProfile.Spec.Parent = namespacedCloudProfileParent
+
+				attrs := admission.NewAttributesRecord(&namespacedCloudProfile, nil, gardencorev1beta1.Kind("NamespacedCloudProfile").WithVersion("version"), "", namespacedCloudProfile.Name, gardencorev1beta1.Resource("namespacedcloudprofile").WithVersion("version"), "", admission.Create, &metav1.CreateOptions{}, false, nil)
+
+				Expect(admissionHandler.Validate(ctx, attrs, nil)).To(Succeed())
+			})
 		})
 
-		It("should not allow creating a (Namespaced)CloudProfile if the resulting Kubernetes versions are empty", func() {
-			parentCloudProfile.Spec.Kubernetes.Versions = []gardencorev1beta1.ExpirableVersion{}
-			Expect(coreInformerFactory.Core().V1beta1().CloudProfiles().Informer().GetStore().Add(&parentCloudProfile)).To(Succeed())
+		Describe("Kubernetes versions", func() {
+			It("should not allow creating a (Namespaced)CloudProfile if the resulting Kubernetes versions are empty", func() {
+				parentCloudProfile.Spec.Kubernetes.Versions = []gardencorev1beta1.ExpirableVersion{}
+				Expect(coreInformerFactory.Core().V1beta1().CloudProfiles().Informer().GetStore().Add(&parentCloudProfile)).To(Succeed())
 
-			namespacedCloudProfile.Spec.Parent = namespacedCloudProfileParent
+				namespacedCloudProfile.Spec.Parent = namespacedCloudProfileParent
 
-			attrs := admission.NewAttributesRecord(&namespacedCloudProfile, nil, gardencorev1beta1.Kind("NamespacedCloudProfile").WithVersion("version"), "", namespacedCloudProfile.Name, gardencorev1beta1.Resource("namespacedcloudprofile").WithVersion("version"), "", admission.Create, &metav1.CreateOptions{}, false, nil)
+				attrs := admission.NewAttributesRecord(&namespacedCloudProfile, nil, gardencorev1beta1.Kind("NamespacedCloudProfile").WithVersion("version"), "", namespacedCloudProfile.Name, gardencorev1beta1.Resource("namespacedcloudprofile").WithVersion("version"), "", admission.Create, &metav1.CreateOptions{}, false, nil)
 
-			Expect(admissionHandler.Validate(ctx, attrs, nil)).To(MatchError(ContainSubstring("must provide at least one Kubernetes version")))
+				Expect(admissionHandler.Validate(ctx, attrs, nil)).To(MatchError(ContainSubstring("must provide at least one Kubernetes version")))
+			})
+
+			It("should fail for the latest Kubernetes version being set an expiration date after a potential merge", func() {
+				parentCloudProfile.Spec.Kubernetes = gardencorev1beta1.KubernetesSettings{Versions: []gardencorev1beta1.ExpirableVersion{
+					{Version: "1.30.0"},
+				}}
+				Expect(coreInformerFactory.Core().V1beta1().CloudProfiles().Informer().GetStore().Add(&parentCloudProfile)).To(Succeed())
+
+				namespacedCloudProfile.Spec.Parent = namespacedCloudProfileParent
+				namespacedCloudProfile.Spec.Kubernetes = &gardencore.KubernetesSettings{Versions: []gardencore.ExpirableVersion{
+					{Version: "1.30.0", ExpirationDate: ptr.To(metav1.Time{Time: time.Now().Add(time.Hour)})},
+				}}
+
+				attrs := admission.NewAttributesRecord(&namespacedCloudProfile, nil, gardencorev1beta1.Kind("NamespacedCloudProfile").WithVersion("version"), "", namespacedCloudProfile.Name, gardencorev1beta1.Resource("namespacedcloudprofile").WithVersion("version"), "", admission.Create, &metav1.CreateOptions{}, false, nil)
+
+				Expect(admissionHandler.Validate(ctx, attrs, nil)).To(MatchError(ContainSubstring("expiration date of latest kubernetes version ('1.30.0') must not be set")))
+			})
+
+			It("should allow creating a NamespacedCloudProfile that specifies a Kubernetes version from the parent CloudProfile and extends the expiration date", func() {
+				parentCloudProfile.Spec.Kubernetes = gardencorev1beta1.KubernetesSettings{Versions: []gardencorev1beta1.ExpirableVersion{
+					{Version: "1.30.0"}, {Version: "1.29.1"},
+				}}
+				Expect(coreInformerFactory.Core().V1beta1().CloudProfiles().Informer().GetStore().Add(&parentCloudProfile)).To(Succeed())
+
+				namespacedCloudProfile.Spec.Parent = namespacedCloudProfileParent
+				namespacedCloudProfile.Spec.Kubernetes = &gardencore.KubernetesSettings{Versions: []gardencore.ExpirableVersion{
+					{Version: "1.29.1", ExpirationDate: ptr.To(metav1.Time{Time: time.Now().Add(time.Hour)})},
+				}}
+
+				attrs := admission.NewAttributesRecord(&namespacedCloudProfile, nil, gardencorev1beta1.Kind("NamespacedCloudProfile").WithVersion("version"), "", namespacedCloudProfile.Name, gardencorev1beta1.Resource("namespacedcloudprofile").WithVersion("version"), "", admission.Create, &metav1.CreateOptions{}, false, nil)
+
+				Expect(admissionHandler.Validate(ctx, attrs, nil)).To(Succeed())
+			})
+
+			It("should fail for creating a NamespacedCloudProfile that specifies a Kubernetes version not in the parent CloudProfile", func() {
+				parentCloudProfile.Spec.Kubernetes = gardencorev1beta1.KubernetesSettings{Versions: []gardencorev1beta1.ExpirableVersion{
+					{Version: "1.29.0"},
+				}}
+				Expect(coreInformerFactory.Core().V1beta1().CloudProfiles().Informer().GetStore().Add(&parentCloudProfile)).To(Succeed())
+
+				namespacedCloudProfile.Spec.Parent = namespacedCloudProfileParent
+				namespacedCloudProfile.Spec.Kubernetes = &gardencore.KubernetesSettings{Versions: []gardencore.ExpirableVersion{
+					{Version: "1.30.0", ExpirationDate: ptr.To(metav1.Now())},
+				}}
+
+				attrs := admission.NewAttributesRecord(&namespacedCloudProfile, nil, gardencorev1beta1.Kind("NamespacedCloudProfile").WithVersion("version"), "", namespacedCloudProfile.Name, gardencorev1beta1.Resource("namespacedcloudprofile").WithVersion("version"), "", admission.Create, &metav1.CreateOptions{}, false, nil)
+
+				Expect(admissionHandler.Validate(ctx, attrs, nil)).To(MatchError(ContainSubstring("invalid kubernetes version specified: '1.30.0' does not exist in parent")))
+			})
+
+			It("should fail for creating a NamespacedCloudProfile that specifies a Kubernetes version without an expiration date", func() {
+				parentCloudProfile.Spec.Kubernetes = gardencorev1beta1.KubernetesSettings{Versions: []gardencorev1beta1.ExpirableVersion{
+					{Version: "1.29.0"}, {Version: "1.30.0"},
+				}}
+				Expect(coreInformerFactory.Core().V1beta1().CloudProfiles().Informer().GetStore().Add(&parentCloudProfile)).To(Succeed())
+
+				namespacedCloudProfile.Spec.Parent = namespacedCloudProfileParent
+				namespacedCloudProfile.Spec.Kubernetes = &gardencore.KubernetesSettings{Versions: []gardencore.ExpirableVersion{
+					{Version: "1.29.0"},
+				}}
+
+				attrs := admission.NewAttributesRecord(&namespacedCloudProfile, nil, gardencorev1beta1.Kind("NamespacedCloudProfile").WithVersion("version"), "", namespacedCloudProfile.Name, gardencorev1beta1.Resource("namespacedcloudprofile").WithVersion("version"), "", admission.Create, &metav1.CreateOptions{}, false, nil)
+
+				Expect(admissionHandler.Validate(ctx, attrs, nil)).To(MatchError(ContainSubstring("specified version '1.29.0' does not set expiration date")))
+			})
+
+			It("should fail for past expiration dates", func() {
+				parentCloudProfile.Spec.Kubernetes = gardencorev1beta1.KubernetesSettings{Versions: []gardencorev1beta1.ExpirableVersion{
+					{Version: "1.29.0"}, {Version: "1.30.0"},
+				}}
+				Expect(coreInformerFactory.Core().V1beta1().CloudProfiles().Informer().GetStore().Add(&parentCloudProfile)).To(Succeed())
+
+				pastExpirationDate := &metav1.Time{Time: time.Now().Add(-1 * time.Hour)}
+				namespacedCloudProfile.Spec.Parent = namespacedCloudProfileParent
+				namespacedCloudProfile.Spec.Kubernetes = &gardencore.KubernetesSettings{Versions: []gardencore.ExpirableVersion{
+					{Version: "1.29.0", ExpirationDate: pastExpirationDate},
+				}}
+
+				attrs := admission.NewAttributesRecord(&namespacedCloudProfile, nil, gardencorev1beta1.Kind("NamespacedCloudProfile").WithVersion("version"), "", namespacedCloudProfile.Name, gardencorev1beta1.Resource("namespacedcloudprofile").WithVersion("version"), "", admission.Create, &metav1.CreateOptions{}, false, nil)
+
+				Expect(admissionHandler.Validate(ctx, attrs, nil)).To(MatchError(ContainSubstring("expiration date of version '1.29.0' is in the past")))
+			})
+
+			It("should allow updates to a NamespacedCloudProfile even if one unchanged overridden Kubernetes version is already expired", func() {
+				parentCloudProfile.Spec.Kubernetes = gardencorev1beta1.KubernetesSettings{Versions: []gardencorev1beta1.ExpirableVersion{
+					{Version: "1.28.0"}, {Version: "1.29.0"}, {Version: "1.30.0"},
+				}}
+				Expect(coreInformerFactory.Core().V1beta1().CloudProfiles().Informer().GetStore().Add(&parentCloudProfile)).To(Succeed())
+
+				pastExpirationDate := &metav1.Time{Time: time.Now().Add(-1 * time.Hour)}
+				futureExpirationDate := &metav1.Time{Time: time.Now().Add(1 * time.Hour)}
+				namespacedCloudProfile.Spec.Parent = namespacedCloudProfileParent
+				namespacedCloudProfile.Spec.Kubernetes = &gardencore.KubernetesSettings{Versions: []gardencore.ExpirableVersion{
+					{Version: "1.28.0", ExpirationDate: pastExpirationDate},
+				}}
+				namespacedCloudProfile.Status.CloudProfileSpec.Kubernetes.Versions = []gardencore.ExpirableVersion{
+					{Version: "1.28.0", ExpirationDate: pastExpirationDate}, {Version: "1.29.0"}, {Version: "1.30.0"},
+				}
+
+				updatedNamespacedCloudProfile := (&namespacedCloudProfile).DeepCopy()
+				namespacedCloudProfile.Spec.Kubernetes = &gardencore.KubernetesSettings{Versions: []gardencore.ExpirableVersion{
+					{Version: "1.28.0", ExpirationDate: pastExpirationDate},
+					{Version: "1.29.0", ExpirationDate: futureExpirationDate},
+				}}
+
+				attrs := admission.NewAttributesRecord(updatedNamespacedCloudProfile, &namespacedCloudProfile, gardencorev1beta1.Kind("NamespacedCloudProfile").WithVersion("version"), "", namespacedCloudProfile.Name, gardencorev1beta1.Resource("namespacedcloudprofile").WithVersion("version"), "", admission.Update, &metav1.CreateOptions{}, false, nil)
+
+				Expect(admissionHandler.Validate(ctx, attrs, nil)).To(Succeed())
+			})
+
+			It("should fail for updating a expiration date to a still invalid value", func() {
+				parentCloudProfile.Spec.Kubernetes = gardencorev1beta1.KubernetesSettings{Versions: []gardencorev1beta1.ExpirableVersion{
+					{Version: "1.28.0"}, {Version: "1.29.0"},
+				}}
+				Expect(coreInformerFactory.Core().V1beta1().CloudProfiles().Informer().GetStore().Add(&parentCloudProfile)).To(Succeed())
+
+				pastExpirationDate := &metav1.Time{Time: time.Now().Add(-1 * time.Hour)}
+				stillExpiredDate := &metav1.Time{Time: time.Now().Add(-30 * time.Minute)}
+				namespacedCloudProfile.Spec.Parent = namespacedCloudProfileParent
+				namespacedCloudProfile.Spec.Kubernetes = &gardencore.KubernetesSettings{Versions: []gardencore.ExpirableVersion{
+					{Version: "1.28.0", ExpirationDate: pastExpirationDate},
+				}}
+				namespacedCloudProfile.Status.CloudProfileSpec.Kubernetes.Versions = []gardencore.ExpirableVersion{
+					{Version: "1.28.0", ExpirationDate: pastExpirationDate}, {Version: "1.29.0"},
+				}
+
+				updatedNamespacedCloudProfile := (&namespacedCloudProfile).DeepCopy()
+				updatedNamespacedCloudProfile.Spec.Kubernetes = &gardencore.KubernetesSettings{Versions: []gardencore.ExpirableVersion{
+					{Version: "1.28.0", ExpirationDate: stillExpiredDate},
+				}}
+
+				attrs := admission.NewAttributesRecord(updatedNamespacedCloudProfile, &namespacedCloudProfile, gardencorev1beta1.Kind("NamespacedCloudProfile").WithVersion("version"), "", namespacedCloudProfile.Name, gardencorev1beta1.Resource("namespacedcloudprofile").WithVersion("version"), "", admission.Update, &metav1.CreateOptions{}, false, nil)
+
+				Expect(admissionHandler.Validate(ctx, attrs, nil)).To(MatchError(ContainSubstring("expiration date of version '1.28.0' is in the past")))
+			})
 		})
 
-		It("should allow creating a NamespacedCloudProfile with a valid parent reference", func() {
-			Expect(coreInformerFactory.Core().V1beta1().CloudProfiles().Informer().GetStore().Add(&parentCloudProfile)).To(Succeed())
+		Describe("machineType", func() {
+			It("should not allow creating a NamespacedCloudProfile that defines a machineType of the parent CloudProfile", func() {
+				parentCloudProfile.Spec.MachineTypes = []gardencorev1beta1.MachineType{machineType}
+				Expect(coreInformerFactory.Core().V1beta1().CloudProfiles().Informer().GetStore().Add(&parentCloudProfile)).To(Succeed())
 
-			namespacedCloudProfile.Spec.Parent = namespacedCloudProfileParent
+				namespacedCloudProfile.Spec.Parent = namespacedCloudProfileParent
+				namespacedCloudProfile.Spec.MachineTypes = []gardencore.MachineType{machineTypeCore}
 
-			attrs := admission.NewAttributesRecord(&namespacedCloudProfile, nil, gardencorev1beta1.Kind("NamespacedCloudProfile").WithVersion("version"), "", namespacedCloudProfile.Name, gardencorev1beta1.Resource("namespacedcloudprofile").WithVersion("version"), "", admission.Create, &metav1.CreateOptions{}, false, nil)
+				attrs := admission.NewAttributesRecord(&namespacedCloudProfile, nil, gardencorev1beta1.Kind("NamespacedCloudProfile").WithVersion("version"), "", namespacedCloudProfile.Name, gardencorev1beta1.Resource("namespacedcloudprofile").WithVersion("version"), "", admission.Create, &metav1.CreateOptions{}, false, nil)
 
-			Expect(admissionHandler.Validate(ctx, attrs, nil)).To(Succeed())
+				Expect(admissionHandler.Validate(ctx, attrs, nil)).To(MatchError(ContainSubstring("NamespacedCloudProfile attempts to overwrite parent CloudProfile with machineType")))
+				Expect(admissionHandler.Validate(ctx, attrs, nil)).To(MatchError(ContainSubstring("my-machine")))
+			})
+
+			It("should allow creating a NamespacedCloudProfile that defines a machineType of the parent CloudProfile if it was added to the NamespacedCloudProfile first", func() {
+				Expect(coreInformerFactory.Core().V1beta1().CloudProfiles().Informer().GetStore().Add(&parentCloudProfile)).To(Succeed())
+
+				namespacedCloudProfile.Spec.Parent = namespacedCloudProfileParent
+				namespacedCloudProfile.Spec.MachineTypes = []gardencore.MachineType{machineTypeCore}
+
+				attrs := admission.NewAttributesRecord(&namespacedCloudProfile, nil, gardencorev1beta1.Kind("NamespacedCloudProfile").WithVersion("version"), "", namespacedCloudProfile.Name, gardencorev1beta1.Resource("namespacedcloudprofile").WithVersion("version"), "", admission.Create, &metav1.CreateOptions{}, false, nil)
+
+				Expect(admissionHandler.Validate(ctx, attrs, nil)).To(Succeed())
+
+				parentCloudProfile.Spec.MachineTypes = []gardencorev1beta1.MachineType{machineType}
+
+				attrs = admission.NewAttributesRecord(&namespacedCloudProfile, &namespacedCloudProfile, gardencorev1beta1.Kind("NamespacedCloudProfile").WithVersion("version"), "", namespacedCloudProfile.Name, gardencorev1beta1.Resource("namespacedcloudprofile").WithVersion("version"), "", admission.Update, &metav1.CreateOptions{}, false, nil)
+
+				Expect(admissionHandler.Validate(ctx, attrs, nil)).To(Succeed())
+			})
+
+			It("should allow creating a NamespacedCloudProfile that defines a machineType of the parent CloudProfile if it was added to the NamespacedCloudProfile first but is changed", func() {
+				Expect(coreInformerFactory.Core().V1beta1().CloudProfiles().Informer().GetStore().Add(&parentCloudProfile)).To(Succeed())
+
+				namespacedCloudProfile.Spec.Parent = namespacedCloudProfileParent
+				namespacedCloudProfile.Spec.MachineTypes = []gardencore.MachineType{machineTypeCore}
+
+				attrs := admission.NewAttributesRecord(&namespacedCloudProfile, nil, gardencorev1beta1.Kind("NamespacedCloudProfile").WithVersion("version"), "", namespacedCloudProfile.Name, gardencorev1beta1.Resource("namespacedcloudprofile").WithVersion("version"), "", admission.Create, &metav1.CreateOptions{}, false, nil)
+
+				Expect(admissionHandler.Validate(ctx, attrs, nil)).To(Succeed())
+
+				oldNamespacedCloudProfile := *namespacedCloudProfile.DeepCopy()
+				machineType.Usable = ptr.To(false)
+				parentCloudProfile.Spec.MachineTypes = []gardencorev1beta1.MachineType{machineType}
+
+				attrs = admission.NewAttributesRecord(&namespacedCloudProfile, &oldNamespacedCloudProfile, gardencorev1beta1.Kind("NamespacedCloudProfile").WithVersion("version"), "", namespacedCloudProfile.Name, gardencorev1beta1.Resource("namespacedcloudprofile").WithVersion("version"), "", admission.Update, &metav1.CreateOptions{}, false, nil)
+
+				Expect(admissionHandler.Validate(ctx, attrs, nil)).To(Succeed())
+			})
+
+			It("should allow creating a NamespacedCloudProfile that defines a different machineType than the parent CloudProfile", func() {
+				Expect(coreInformerFactory.Core().V1beta1().CloudProfiles().Informer().GetStore().Add(&parentCloudProfile)).To(Succeed())
+
+				namespacedCloudProfile.Spec.Parent = namespacedCloudProfileParent
+				namespacedCloudProfile.Spec.MachineTypes = []gardencore.MachineType{{Name: "my-other-machine", Architecture: ptr.To("amd64")}}
+
+				parentCloudProfile.Spec.MachineTypes = []gardencorev1beta1.MachineType{machineType}
+
+				attrs := admission.NewAttributesRecord(&namespacedCloudProfile, nil, gardencorev1beta1.Kind("NamespacedCloudProfile").WithVersion("version"), "", namespacedCloudProfile.Name, gardencorev1beta1.Resource("namespacedcloudprofile").WithVersion("version"), "", admission.Create, &metav1.CreateOptions{}, false, nil)
+
+				Expect(admissionHandler.Validate(ctx, attrs, nil)).To(Succeed())
+			})
 		})
 
-		It("should not allow creating a NamespacedCloudProfile that defines a machineType of the parent CloudProfile", func() {
-			parentCloudProfile.Spec.MachineTypes = []gardencorev1beta1.MachineType{machineType}
-			Expect(coreInformerFactory.Core().V1beta1().CloudProfiles().Informer().GetStore().Add(&parentCloudProfile)).To(Succeed())
+		Describe("machineImages", func() {
+			It("should allow creating a NamespacedCloudProfile that specifies a MachineImage version from the parent CloudProfile and extends the expiration date", func() {
+				parentCloudProfile.Spec.MachineImages = []gardencorev1beta1.MachineImage{
+					{Name: "test-image", Versions: []gardencorev1beta1.MachineImageVersion{{ExpirableVersion: gardencorev1beta1.ExpirableVersion{Version: "1.0.0"}, CRI: []gardencorev1beta1.CRI{{Name: "containerd"}}}}},
+				}
+				Expect(coreInformerFactory.Core().V1beta1().CloudProfiles().Informer().GetStore().Add(&parentCloudProfile)).To(Succeed())
 
-			namespacedCloudProfile.Spec.Parent = namespacedCloudProfileParent
-			namespacedCloudProfile.Spec.MachineTypes = []gardencore.MachineType{machineTypeCore}
+				namespacedCloudProfile.Spec.Parent = namespacedCloudProfileParent
+				namespacedCloudProfile.Spec.MachineImages = []gardencore.MachineImage{
+					{Name: "test-image", Versions: []gardencore.MachineImageVersion{{ExpirableVersion: gardencore.ExpirableVersion{Version: "1.0.0", ExpirationDate: ptr.To(metav1.Now())}, CRI: []gardencore.CRI{{Name: "containerd"}}}}},
+				}
 
-			attrs := admission.NewAttributesRecord(&namespacedCloudProfile, nil, gardencorev1beta1.Kind("NamespacedCloudProfile").WithVersion("version"), "", namespacedCloudProfile.Name, gardencorev1beta1.Resource("namespacedcloudprofile").WithVersion("version"), "", admission.Create, &metav1.CreateOptions{}, false, nil)
+				attrs := admission.NewAttributesRecord(&namespacedCloudProfile, nil, gardencorev1beta1.Kind("NamespacedCloudProfile").WithVersion("version"), "", namespacedCloudProfile.Name, gardencorev1beta1.Resource("namespacedcloudprofile").WithVersion("version"), "", admission.Create, &metav1.CreateOptions{}, false, nil)
 
-			Expect(admissionHandler.Validate(ctx, attrs, nil)).To(MatchError(ContainSubstring("NamespacedCloudProfile attempts to overwrite parent CloudProfile with machineType")))
-			Expect(admissionHandler.Validate(ctx, attrs, nil)).To(MatchError(ContainSubstring("my-machine")))
+				Expect(admissionHandler.Validate(ctx, attrs, nil)).To(Succeed())
+			})
+
+			It("should fail for creating a NamespacedCloudProfile that specifies a MachineImage entry not in the parent CloudProfile", func() {
+				parentCloudProfile.Spec.MachineImages = []gardencorev1beta1.MachineImage{
+					{Name: "test-image", Versions: []gardencorev1beta1.MachineImageVersion{{ExpirableVersion: gardencorev1beta1.ExpirableVersion{Version: "1.0.0"}, CRI: []gardencorev1beta1.CRI{{Name: "containerd"}}}}},
+				}
+				Expect(coreInformerFactory.Core().V1beta1().CloudProfiles().Informer().GetStore().Add(&parentCloudProfile)).To(Succeed())
+
+				namespacedCloudProfile.Spec.Parent = namespacedCloudProfileParent
+				namespacedCloudProfile.Spec.MachineImages = []gardencore.MachineImage{
+					{Name: "another-image", Versions: []gardencore.MachineImageVersion{{ExpirableVersion: gardencore.ExpirableVersion{Version: "1.0.0", ExpirationDate: ptr.To(metav1.Now())}, CRI: []gardencore.CRI{{Name: "containerd"}}}}},
+				}
+
+				attrs := admission.NewAttributesRecord(&namespacedCloudProfile, nil, gardencorev1beta1.Kind("NamespacedCloudProfile").WithVersion("version"), "", namespacedCloudProfile.Name, gardencorev1beta1.Resource("namespacedcloudprofile").WithVersion("version"), "", admission.Create, &metav1.CreateOptions{}, false, nil)
+
+				Expect(admissionHandler.Validate(ctx, attrs, nil)).To(MatchError(ContainSubstring("invalid machine image specified: 'another-image' does not exist in parent")))
+			})
+
+			It("should fail for creating a NamespacedCloudProfile that specifies a MachineImage entry version not in the parent CloudProfile", func() {
+				parentCloudProfile.Spec.MachineImages = []gardencorev1beta1.MachineImage{
+					{Name: "test-image", Versions: []gardencorev1beta1.MachineImageVersion{{ExpirableVersion: gardencorev1beta1.ExpirableVersion{Version: "1.0.0"}, CRI: []gardencorev1beta1.CRI{{Name: "containerd"}}}}},
+				}
+				Expect(coreInformerFactory.Core().V1beta1().CloudProfiles().Informer().GetStore().Add(&parentCloudProfile)).To(Succeed())
+
+				namespacedCloudProfile.Spec.Parent = namespacedCloudProfileParent
+				namespacedCloudProfile.Spec.MachineImages = []gardencore.MachineImage{
+					{Name: "test-image", Versions: []gardencore.MachineImageVersion{{ExpirableVersion: gardencore.ExpirableVersion{Version: "1.2.0", ExpirationDate: ptr.To(metav1.Now())}, CRI: []gardencore.CRI{{Name: "containerd"}}}}},
+				}
+
+				attrs := admission.NewAttributesRecord(&namespacedCloudProfile, nil, gardencorev1beta1.Kind("NamespacedCloudProfile").WithVersion("version"), "", namespacedCloudProfile.Name, gardencorev1beta1.Resource("namespacedcloudprofile").WithVersion("version"), "", admission.Create, &metav1.CreateOptions{}, false, nil)
+
+				Expect(admissionHandler.Validate(ctx, attrs, nil)).To(MatchError(ContainSubstring("invalid machine image specified: 'test-image@1.2.0' does not exist in parent")))
+			})
 		})
-
-		It("should allow creating a NamespacedCloudProfile that defines a machineType of the parent CloudProfile if it was added to the NamespacedCloudProfile first", func() {
-			Expect(coreInformerFactory.Core().V1beta1().CloudProfiles().Informer().GetStore().Add(&parentCloudProfile)).To(Succeed())
-
-			namespacedCloudProfile.Spec.Parent = namespacedCloudProfileParent
-			namespacedCloudProfile.Spec.MachineTypes = []gardencore.MachineType{machineTypeCore}
-
-			attrs := admission.NewAttributesRecord(&namespacedCloudProfile, nil, gardencorev1beta1.Kind("NamespacedCloudProfile").WithVersion("version"), "", namespacedCloudProfile.Name, gardencorev1beta1.Resource("namespacedcloudprofile").WithVersion("version"), "", admission.Create, &metav1.CreateOptions{}, false, nil)
-
-			Expect(admissionHandler.Validate(ctx, attrs, nil)).To(Succeed())
-
-			parentCloudProfile.Spec.MachineTypes = []gardencorev1beta1.MachineType{machineType}
-
-			attrs = admission.NewAttributesRecord(&namespacedCloudProfile, &namespacedCloudProfile, gardencorev1beta1.Kind("NamespacedCloudProfile").WithVersion("version"), "", namespacedCloudProfile.Name, gardencorev1beta1.Resource("namespacedcloudprofile").WithVersion("version"), "", admission.Update, &metav1.CreateOptions{}, false, nil)
-
-			Expect(admissionHandler.Validate(ctx, attrs, nil)).To(Succeed())
-		})
-
-		It("should allow creating a NamespacedCloudProfile that defines a machineType of the parent CloudProfile if it was added to the NamespacedCloudProfile first but is changed", func() {
-			Expect(coreInformerFactory.Core().V1beta1().CloudProfiles().Informer().GetStore().Add(&parentCloudProfile)).To(Succeed())
-
-			namespacedCloudProfile.Spec.Parent = namespacedCloudProfileParent
-			namespacedCloudProfile.Spec.MachineTypes = []gardencore.MachineType{machineTypeCore}
-
-			attrs := admission.NewAttributesRecord(&namespacedCloudProfile, nil, gardencorev1beta1.Kind("NamespacedCloudProfile").WithVersion("version"), "", namespacedCloudProfile.Name, gardencorev1beta1.Resource("namespacedcloudprofile").WithVersion("version"), "", admission.Create, &metav1.CreateOptions{}, false, nil)
-
-			Expect(admissionHandler.Validate(ctx, attrs, nil)).To(Succeed())
-
-			oldNamespacedCloudProfile := *namespacedCloudProfile.DeepCopy()
-			namespacedCloudProfile.Spec.MachineImages = []gardencore.MachineImage{machineImageCore}
-			parentCloudProfile.Spec.MachineTypes = []gardencorev1beta1.MachineType{machineType}
-
-			attrs = admission.NewAttributesRecord(&namespacedCloudProfile, &oldNamespacedCloudProfile, gardencorev1beta1.Kind("NamespacedCloudProfile").WithVersion("version"), "", namespacedCloudProfile.Name, gardencorev1beta1.Resource("namespacedcloudprofile").WithVersion("version"), "", admission.Update, &metav1.CreateOptions{}, false, nil)
-
-			Expect(admissionHandler.Validate(ctx, attrs, nil)).To(Succeed())
-		})
-
-		It("should allow creating a NamespacedCloudProfile that defines a different machineType than the parent CloudProfile", func() {
-			Expect(coreInformerFactory.Core().V1beta1().CloudProfiles().Informer().GetStore().Add(&parentCloudProfile)).To(Succeed())
-
-			namespacedCloudProfile.Spec.Parent = namespacedCloudProfileParent
-			namespacedCloudProfile.Spec.MachineTypes = []gardencore.MachineType{{Name: "my-other-machine"}}
-
-			parentCloudProfile.Spec.MachineTypes = []gardencorev1beta1.MachineType{machineType}
-
-			attrs := admission.NewAttributesRecord(&namespacedCloudProfile, nil, gardencorev1beta1.Kind("NamespacedCloudProfile").WithVersion("version"), "", namespacedCloudProfile.Name, gardencorev1beta1.Resource("namespacedcloudprofile").WithVersion("version"), "", admission.Create, &metav1.CreateOptions{}, false, nil)
-
-			Expect(admissionHandler.Validate(ctx, attrs, nil)).To(Succeed())
-		})
-
-		It("should allow creating a NamespacedCloudProfile that specifies a Kubernetes version from the parent CloudProfile and extends the expiration date", func() {
-			parentCloudProfile.Spec.Kubernetes = gardencorev1beta1.KubernetesSettings{Versions: []gardencorev1beta1.ExpirableVersion{
-				{Version: "1.30.0"},
-			}}
-			Expect(coreInformerFactory.Core().V1beta1().CloudProfiles().Informer().GetStore().Add(&parentCloudProfile)).To(Succeed())
-
-			namespacedCloudProfile.Spec.Parent = namespacedCloudProfileParent
-			namespacedCloudProfile.Spec.Kubernetes = &gardencore.KubernetesSettings{Versions: []gardencore.ExpirableVersion{
-				{Version: "1.30.0", ExpirationDate: ptr.To(metav1.Now())},
-			}}
-
-			attrs := admission.NewAttributesRecord(&namespacedCloudProfile, nil, gardencorev1beta1.Kind("NamespacedCloudProfile").WithVersion("version"), "", namespacedCloudProfile.Name, gardencorev1beta1.Resource("namespacedcloudprofile").WithVersion("version"), "", admission.Create, &metav1.CreateOptions{}, false, nil)
-
-			Expect(admissionHandler.Validate(ctx, attrs, nil)).To(Succeed())
-		})
-
-		It("should fail for creating a NamespacedCloudProfile that specifies a Kubernetes version not in the parent CloudProfile", func() {
-			parentCloudProfile.Spec.Kubernetes = gardencorev1beta1.KubernetesSettings{Versions: []gardencorev1beta1.ExpirableVersion{
-				{Version: "1.29.0"},
-			}}
-			Expect(coreInformerFactory.Core().V1beta1().CloudProfiles().Informer().GetStore().Add(&parentCloudProfile)).To(Succeed())
-
-			namespacedCloudProfile.Spec.Parent = namespacedCloudProfileParent
-			namespacedCloudProfile.Spec.Kubernetes = &gardencore.KubernetesSettings{Versions: []gardencore.ExpirableVersion{
-				{Version: "1.30.0", ExpirationDate: ptr.To(metav1.Now())},
-			}}
-
-			attrs := admission.NewAttributesRecord(&namespacedCloudProfile, nil, gardencorev1beta1.Kind("NamespacedCloudProfile").WithVersion("version"), "", namespacedCloudProfile.Name, gardencorev1beta1.Resource("namespacedcloudprofile").WithVersion("version"), "", admission.Create, &metav1.CreateOptions{}, false, nil)
-
-			Expect(admissionHandler.Validate(ctx, attrs, nil)).To(MatchError(ContainSubstring("invalid version specified: '1.30.0' does not exist in parent")))
-		})
-
-		// TODO(LucaBernstein): NamespacedCLoudProfile machineImages
-		//  - new versions may be added without expiration date
-		//  - new versions may be added with expiration date
-		//  - existing versions expiration date may be overridden
-		//  - Q: May new categories of machine images be added?
-		//  - Q: Should checks on the specified expiration dates be performed (e.g. only extend, not reduce)?
 	})
 
 	Describe("#Register", func() {

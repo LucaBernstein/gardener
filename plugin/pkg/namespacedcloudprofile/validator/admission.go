@@ -8,23 +8,24 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/gardener/gardener/pkg/api"
-	"github.com/gardener/gardener/pkg/apis/core/validation"
-	"github.com/gardener/gardener/plugin/pkg/utils"
 	"io"
-	"k8s.io/apimachinery/pkg/util/validation/field"
 	"reflect"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/apiserver/pkg/admission"
+	"k8s.io/utils/ptr"
 
+	"github.com/gardener/gardener/pkg/api"
 	gardencore "github.com/gardener/gardener/pkg/apis/core"
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
+	"github.com/gardener/gardener/pkg/apis/core/validation"
 	admissioninitializer "github.com/gardener/gardener/pkg/apiserver/admission/initializer"
 	gardencoreinformers "github.com/gardener/gardener/pkg/client/core/informers/externalversions"
 	gardencorev1beta1listers "github.com/gardener/gardener/pkg/client/core/listers/core/v1beta1"
 	plugin "github.com/gardener/gardener/plugin/pkg"
+	"github.com/gardener/gardener/plugin/pkg/utils"
 )
 
 // Register registers a plugin.
@@ -141,6 +142,9 @@ func (v *ValidateNamespacedCloudProfile) Validate(_ context.Context, a admission
 	if err := validationContext.validateKubernetesVersionOverrides(a); err != nil {
 		return err
 	}
+	if err := validationContext.validateMachineImageOverrides(a); err != nil {
+		return err
+	}
 	if err := validationContext.validateSimulatedCloudProfileStatusMergeResult(a); err != nil {
 		return err
 	}
@@ -185,22 +189,49 @@ func isMachineTypePresentInNamespacedCloudProfile(machineType gardencore.Machine
 	return false
 }
 
-func (c *validationContext) validateKubernetesVersionOverrides(_ admission.Attributes) error {
+func (c *validationContext) validateKubernetesVersionOverrides(attr admission.Attributes) error {
 	if c.namespacedCloudProfile.Spec.Kubernetes == nil {
 		return nil
 	}
-	parentVersions := make(map[string]*metav1.Time)
-	for _, parentVersion := range c.parentCloudProfile.Spec.Kubernetes.Versions {
-		parentVersions[parentVersion.Version] = parentVersion.ExpirationDate
+
+	now := ptr.To(metav1.Now())
+	parentVersions := utils.MapOf(c.parentCloudProfile.Spec.Kubernetes.Versions, func(version gardencorev1beta1.ExpirableVersion) string { return version.Version })
+	currentVersionsMerged := make(map[string]gardencore.ExpirableVersion)
+	if attr.GetOperation() == admission.Update {
+		currentVersionsMerged = utils.MapOf(c.oldNamespacedCloudProfile.Status.CloudProfileSpec.Kubernetes.Versions, func(version gardencore.ExpirableVersion) string { return version.Version })
 	}
 	for _, newVersion := range c.namespacedCloudProfile.Spec.Kubernetes.Versions {
-		//if newVersion.ExpirationDate == nil {
-		//	return fmt.Errorf("specified version '%s' does not set expiration date", newVersion.Version)
-		//}
 		if _, exists := parentVersions[newVersion.Version]; !exists {
-			return fmt.Errorf("invalid version specified: '%s' does not exist in parent CloudProfile and thus cannot be overridden", newVersion.Version)
+			return fmt.Errorf("invalid kubernetes version specified: '%s' does not exist in parent CloudProfile and thus cannot be overridden", newVersion.Version)
 		}
-		// TODO(LucaBernstein): Is it necessary to do any date comparisons here with the original version against the override expiry date?
+		if newVersion.ExpirationDate == nil {
+			return fmt.Errorf("specified version '%s' does not set expiration date", newVersion.Version)
+		}
+		if newVersion.ExpirationDate.Before(now) {
+			if override, exists := currentVersionsMerged[newVersion.Version]; !exists || !override.ExpirationDate.Equal(newVersion.ExpirationDate) {
+				return fmt.Errorf("expiration date of version '%s' is in the past", newVersion.Version)
+			}
+		}
+	}
+	return nil
+}
+
+func (c *validationContext) validateMachineImageOverrides(_ admission.Attributes) error {
+	if c.namespacedCloudProfile.Spec.MachineImages == nil {
+		return nil
+	}
+
+	parentImages := utils.MapOf(c.parentCloudProfile.Spec.MachineImages, func(mi gardencorev1beta1.MachineImage) string { return mi.Name })
+	for _, newImage := range c.namespacedCloudProfile.Spec.MachineImages {
+		if _, exists := parentImages[newImage.Name]; !exists {
+			return fmt.Errorf("invalid machine image specified: '%s' does not exist in parent CloudProfile and thus cannot be overridden", newImage.Name)
+		}
+		parentVersions := utils.MapOf(parentImages[newImage.Name].Versions, func(v gardencorev1beta1.MachineImageVersion) string { return v.Version })
+		for _, newVersion := range newImage.Versions {
+			if _, exists := parentVersions[newVersion.Version]; !exists {
+				return fmt.Errorf("invalid machine image specified: '%s@%s' does not exist in parent CloudProfile and thus cannot be overridden", newImage.Name, newVersion.Version)
+			}
+		}
 	}
 	return nil
 }

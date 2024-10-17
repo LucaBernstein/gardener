@@ -43,8 +43,8 @@ func GetCloudProfileSpec(cloudProfileLister gardencorev1beta1listers.CloudProfil
 	return nil, fmt.Errorf("could not find referenced cloudprofile")
 }
 
-// ValidateCloudProfileChanges validates that the referenced CloudProfile does only change towards a more specific reference
-// (i.e. currently only from a CloudProfile to a descendant NamespacedCloudProfile).
+// ValidateCloudProfileChanges validates that the referenced CloudProfile does only change within the current path of the profile hierarchy
+// (i.e. currently only from a CloudProfile to a descendant NamespacedCloudProfile or from a NamespacedCloudProfile to its direct parent CloudProfile).
 // For now, other changes are not supported (e.g. from one CloudProfile to another or from one NamespacedCloudProfile to another).
 func ValidateCloudProfileChanges(namespacedCloudProfileLister gardencorev1beta1listers.NamespacedCloudProfileLister, newShoot, oldShoot *core.Shoot) error {
 	oldCloudProfileReference := BuildCloudProfileReference(oldShoot)
@@ -56,17 +56,29 @@ func ValidateCloudProfileChanges(namespacedCloudProfileLister gardencorev1beta1l
 		return nil
 	}
 
-	newCloudProfileRoot, err := getRootCloudProfile(namespacedCloudProfileLister, newCloudProfileReference, newShoot.Namespace)
-	if err != nil {
-		return err
-	}
-	if oldCloudProfileReference.Kind == constants.CloudProfileReferenceKindCloudProfile &&
-		newCloudProfileReference.Kind == constants.CloudProfileReferenceKindNamespacedCloudProfile &&
-		equality.Semantic.DeepEqual(oldCloudProfileReference, newCloudProfileRoot) {
-		return nil
+	// switch from CloudProfile to NamespacedCloudProfile
+	if oldCloudProfileReference.Kind == constants.CloudProfileReferenceKindCloudProfile {
+		newCloudProfileRoot, err := getRootCloudProfile(namespacedCloudProfileLister, newCloudProfileReference, newShoot.Namespace)
+		if err != nil {
+			return err
+		}
+		if equality.Semantic.DeepEqual(oldCloudProfileReference, newCloudProfileRoot) {
+			return nil
+		}
 	}
 
-	return fmt.Errorf("a Seed's CloudProfile may only be changed to a descendant NamespacedCloudProfile, other modifications are currently not supported")
+	// switch from NamespacedCloudProfile to CloudProfile
+	if oldCloudProfileReference.Kind == constants.CloudProfileReferenceKindNamespacedCloudProfile {
+		oldCloudProfileRoot, err := getRootCloudProfile(namespacedCloudProfileLister, oldCloudProfileReference, oldShoot.Namespace)
+		if err != nil {
+			return err
+		}
+		if equality.Semantic.DeepEqual(oldCloudProfileRoot, newCloudProfileReference) {
+			return nil
+		}
+	}
+
+	return fmt.Errorf("a Seed's cloud profile reference may only be changed from a CloudProfile to a descendant NamespacedCloudProfile or back, other modifications are currently not supported")
 }
 
 // getRootCloudProfile determines the root CloudProfile from a CloudProfileReference containing any (Namespaced)CloudProfile

@@ -866,7 +866,7 @@ var _ = Describe("Shoot Validation Tests", func() {
 			Expect(errorList).To(ConsistOf(
 				PointTo(MatchFields(IgnoreExtras, Fields{
 					"Type":  Equal(field.ErrorTypeForbidden),
-					"Field": Equal("spec.cloudProfile.name"),
+					"Field": Equal("spec.cloudProfile"),
 				})),
 				PointTo(MatchFields(IgnoreExtras, Fields{
 					"Type":  Equal(field.ErrorTypeInvalid),
@@ -6048,7 +6048,7 @@ var _ = Describe("Shoot Validation Tests", func() {
 				Expect(errList).To(BeEmpty())
 			})
 
-			It("should not allow switching from a NamespacedCloudProfile to a CloudProfile", func() {
+			It("should allow switching from a NamespacedCloudProfile to a CloudProfile", func() {
 				oldCloudProfileReference := &core.CloudProfileReference{
 					Kind: "NamespacedCloudProfile",
 					Name: "my-profile",
@@ -6060,12 +6060,7 @@ var _ = Describe("Shoot Validation Tests", func() {
 
 				errList := ValidateCloudProfileReference(cloudProfileReference, oldCloudProfileReference, nil, nil, fldPath)
 
-				Expect(errList).To(ConsistOf(
-					PointTo(MatchFields(IgnoreExtras, Fields{
-						"Type":   Equal(field.ErrorTypeForbidden),
-						"Field":  Equal("cloudProfile.kind"),
-						"Detail": Equal("a namespacedcloudprofile must not be changed back to a cloudprofile"),
-					}))))
+				Expect(errList).To(BeEmpty())
 			})
 
 			It("should not allow switching the name of the CloudProfile coming from a cloudProfileName", func() {
@@ -6080,8 +6075,8 @@ var _ = Describe("Shoot Validation Tests", func() {
 				Expect(errList).To(ConsistOf(
 					PointTo(MatchFields(IgnoreExtras, Fields{
 						"Type":   Equal(field.ErrorTypeForbidden),
-						"Field":  Equal("cloudProfile.name"),
-						"Detail": Equal("changing the cloudProfile name is not allowed, except for switching from a CloudProfile to a directly descendant NamespacedCloudProfile"),
+						"Field":  Equal("cloudProfile"),
+						"Detail": Equal("the cloud profile reference can only be changed from a CloudProfile to a directly descendant NamespacedCloudProfile and back"),
 					}))))
 			})
 
@@ -6100,8 +6095,28 @@ var _ = Describe("Shoot Validation Tests", func() {
 				Expect(errList).To(ConsistOf(
 					PointTo(MatchFields(IgnoreExtras, Fields{
 						"Type":   Equal(field.ErrorTypeForbidden),
-						"Field":  Equal("cloudProfile.name"),
-						"Detail": Equal("changing the cloudProfile name is not allowed, except for switching from a CloudProfile to a directly descendant NamespacedCloudProfile"),
+						"Field":  Equal("cloudProfile"),
+						"Detail": Equal("the cloud profile reference can only be changed from a CloudProfile to a directly descendant NamespacedCloudProfile and back"),
+					}))))
+			})
+
+			It("should not allow switching the name of the NamespacedCloudProfile coming from a cloudProfile", func() {
+				oldCloudProfileReference := &core.CloudProfileReference{
+					Kind: "NamespacedCloudProfile",
+					Name: "my-profile",
+				}
+				cloudProfileReference := &core.CloudProfileReference{
+					Kind: "NamespacedCloudProfile",
+					Name: "my-profile-new",
+				}
+
+				errList := ValidateCloudProfileReference(cloudProfileReference, oldCloudProfileReference, nil, nil, fldPath)
+
+				Expect(errList).To(ConsistOf(
+					PointTo(MatchFields(IgnoreExtras, Fields{
+						"Type":   Equal(field.ErrorTypeForbidden),
+						"Field":  Equal("cloudProfile"),
+						"Detail": Equal("the cloud profile reference can only be changed from a CloudProfile to a directly descendant NamespacedCloudProfile and back"),
 					}))))
 			})
 		})

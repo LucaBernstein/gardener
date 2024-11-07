@@ -100,7 +100,7 @@ var _ = Describe("KubeAPIServer", func() {
 		secretNameServiceAccountKey       = "service-account-key-c37a87f6"
 		secretNameServiceAccountKeyBundle = "service-account-key-bundle"
 		secretNameVPNSeedClient           = "vpn-seed-client"
-		secretNameVPNSeedServerTLSAuth    = "vpn-seed-server-tlsauth-a1d0aa00-2a3206b8"
+		secretNameVPNSeedServerTLSAuth    = "vpn-seed-server-tlsauth-a1d0aa00-2a3206b9"
 
 		configMapNameAdmissionConfigs  = "kube-apiserver-admission-config-e38ff146"
 		secretNameAdmissionKubeconfigs = "kube-apiserver-admission-kubeconfigs-e3b0c442"

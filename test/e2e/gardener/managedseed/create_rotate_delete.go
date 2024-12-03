@@ -54,196 +54,217 @@ var _ = Describe("ManagedSeed Tests", Label("ManagedSeed", "default"), func() {
 	})
 	f.Shoot = e2e.DefaultShoot(GetSeedName())
 
-	It("Create Shoot, Create ManagedSeed, Delete ManagedSeed, Delete Shoot", func() {
-		By("Create Shoot")
-		ctx, cancel := context.WithTimeout(parentCtx, 15*time.Minute)
-		defer cancel()
+	Describe("Create Shoot, Create ManagedSeed, Delete ManagedSeed, Delete Shoot", Ordered, func() {
+		var (
+			ctx    context.Context
+			cancel context.CancelFunc
 
-		Expect(f.CreateShootAndWaitForCreation(ctx, false)).To(Succeed())
-		f.Verify()
+			seed        *gardencorev1beta1.Seed
+			managedSeed *seedmanagementv1alpha1.ManagedSeed
 
-		By("Create ManagedSeed")
-		ctx, cancel = context.WithTimeout(parentCtx, 10*time.Minute)
-		defer cancel()
+			verifier    rotation.GardenletKubeconfigRotationVerifier
+			shootClient kubernetes.Interface
+		)
 
-		managedSeed, err := buildManagedSeed(f.Shoot)
-		Expect(err).NotTo(HaveOccurred())
+		It("Create Shoot", func() {
+			ctx, cancel = context.WithTimeout(parentCtx, 15*time.Minute)
+			defer cancel()
 
-		Eventually(func(g Gomega) {
-			g.Expect(f.GardenClient.Client().Create(ctx, managedSeed)).To(Succeed())
-		}).Should(Succeed())
+			Expect(f.CreateShootAndWaitForCreation(ctx, false)).To(Succeed())
+			f.Verify()
+		})
 
-		By("Wait for ManagedSeed to be registered")
-		ctx, cancel = context.WithTimeout(parentCtx, 10*time.Minute)
-		defer cancel()
+		It("Create ManagedSeed", func() {
+			ctx, cancel = context.WithTimeout(parentCtx, 10*time.Minute)
+			defer cancel()
 
-		CEventually(ctx, func(g Gomega) error {
-			g.Expect(f.GardenClient.Client().Get(ctx, client.ObjectKeyFromObject(managedSeed), managedSeed)).To(Succeed())
-			if err := health.CheckManagedSeed(managedSeed); err != nil {
-				return fmt.Errorf("ManagedSeed is not ready yet: %w", err)
-			}
-			return nil
-		}).WithPolling(5 * time.Second).Should(Succeed())
-
-		By("Wait for Seed to be ready")
-		ctx, cancel = context.WithTimeout(parentCtx, 10*time.Minute)
-		defer cancel()
-
-		seed := &gardencorev1beta1.Seed{ObjectMeta: metav1.ObjectMeta{Name: managedSeed.Name}}
-		CEventually(ctx, func(g Gomega) error {
-			g.Expect(f.GardenClient.Client().Get(ctx, client.ObjectKeyFromObject(seed), seed)).To(Succeed())
-			if err := health.CheckSeed(seed, seed.Status.Gardener); err != nil {
-				return fmt.Errorf("seed is not ready yet: %w", err)
-			}
-			return nil
-		}).WithPolling(5 * time.Second).Should(Succeed())
-
-		By("Verify gardenlet kubeconfig rotation scenarios")
-		ctx, cancel = context.WithTimeout(parentCtx, 15*time.Minute)
-		defer cancel()
-
-		var shootClient kubernetes.Interface
-		Eventually(func(g Gomega) {
 			var err error
-			shootClient, err = access.CreateShootClientFromAdminKubeconfig(ctx, f.GardenClient, f.Shoot)
-			g.Expect(err).NotTo(HaveOccurred())
-		}).Should(Succeed())
+			managedSeed, err = buildManagedSeed(f.Shoot)
+			Expect(err).NotTo(HaveOccurred())
 
-		verifier := rotation.GardenletKubeconfigRotationVerifier{
-			GardenReader:                       f.GardenClient.Client(),
-			SeedReader:                         shootClient.Client(),
-			Seed:                               seed,
-			GardenletKubeconfigSecretName:      gardenletKubeconfigSecretName,
-			GardenletKubeconfigSecretNamespace: gardenletKubeconfigSecretNamespace,
-		}
+			Eventually(func(g Gomega) {
+				g.Expect(f.GardenClient.Client().Create(ctx, managedSeed)).To(Succeed())
+			}).Should(Succeed())
+		})
 
-		By("Trigger gardenlet kubeconfig rotation by annotating Seed")
-		{
+		It("Wait for ManagedSeed to be registered", func() {
+			ctx, cancel = context.WithTimeout(parentCtx, 10*time.Minute)
+			defer cancel()
+
+			CEventually(ctx, func(g Gomega) error {
+				g.Expect(f.GardenClient.Client().Get(ctx, client.ObjectKeyFromObject(managedSeed), managedSeed)).To(Succeed())
+				if err := health.CheckManagedSeed(managedSeed); err != nil {
+					return fmt.Errorf("ManagedSeed is not ready yet: %w", err)
+				}
+				return nil
+			}).WithPolling(5 * time.Second).Should(Succeed())
+		})
+
+		It("Wait for Seed to be ready", func() {
+			ctx, cancel = context.WithTimeout(parentCtx, 10*time.Minute)
+			defer cancel()
+
+			seed := &gardencorev1beta1.Seed{ObjectMeta: metav1.ObjectMeta{Name: managedSeed.Name}}
+			CEventually(ctx, func(g Gomega) error {
+				g.Expect(f.GardenClient.Client().Get(ctx, client.ObjectKeyFromObject(seed), seed)).To(Succeed())
+				if err := health.CheckSeed(seed, seed.Status.Gardener); err != nil {
+					return fmt.Errorf("seed is not ready yet: %w", err)
+				}
+				return nil
+			}).WithPolling(5 * time.Second).Should(Succeed())
+
+		})
+
+		It("Verify gardenlet kubeconfig rotation scenarios", func() {
+			ctx, cancel = context.WithTimeout(parentCtx, 15*time.Minute)
+			defer cancel()
+
+			Eventually(func(g Gomega) {
+				var err error
+				shootClient, err = access.CreateShootClientFromAdminKubeconfig(ctx, f.GardenClient, f.Shoot)
+				g.Expect(err).NotTo(HaveOccurred())
+			}).Should(Succeed())
+
+			verifier = rotation.GardenletKubeconfigRotationVerifier{
+				GardenReader:                       f.GardenClient.Client(),
+				SeedReader:                         shootClient.Client(),
+				Seed:                               seed,
+				GardenletKubeconfigSecretName:      gardenletKubeconfigSecretName,
+				GardenletKubeconfigSecretNamespace: gardenletKubeconfigSecretNamespace,
+			}
+		})
+
+		It("Trigger gardenlet kubeconfig rotation by annotating Seed", func() {
 			verifier.Before(ctx)
 			Eventually(func() error {
 				return triggerGardenletKubeconfigRotationViaSeed(ctx, f.GardenClient.Client(), seed)
 			}).Should(Succeed())
 			verifier.After(ctx, false)
-		}
+		})
 
-		By("Trigger gardenlet kubeconfig rotation by annotating ManagedSeed")
-		{
+		It("Trigger gardenlet kubeconfig rotation by annotating ManagedSeed", func() {
 			verifier.Before(ctx)
 			Eventually(func() error {
 				return triggerGardenletKubeconfigRotationViaManagedSeed(ctx, f.GardenClient.Client(), managedSeed)
 			}).Should(Succeed())
 			verifier.After(ctx, true)
-		}
+		})
 
-		By("Trigger gardenlet kubeconfig rotation by annotating its kubeconfig secret")
-		{
+		It("Trigger gardenlet kubeconfig rotation by annotating its kubeconfig secret", func() {
 			verifier.Before(ctx)
 			Eventually(func() error {
 				return triggerGardenletKubeconfigRotationViaSecret(ctx, shootClient.Client())
 			}).Should(Succeed())
 			verifier.After(ctx, false)
-		}
+		})
 
-		By("Trigger gardenlet kubeconfig auto-rotation by reducing kubeconfig validity")
-		{
-			By("Scale down gardenlet deployment and wait until no gardenlet pods exist anymore")
-			CEventually(ctx, func(g Gomega) []corev1.Pod {
-				deployment := &appsv1.Deployment{}
-				g.Expect(shootClient.Client().Get(ctx, client.ObjectKey{Name: "gardenlet", Namespace: "garden"}, deployment)).To(Succeed())
+		Describe("Trigger gardenlet kubeconfig auto-rotation by reducing kubeconfig validity", func() {
+			It("Scale down gardenlet deployment and wait until no gardenlet pods exist anymore", func() {
+				CEventually(ctx, func(g Gomega) []corev1.Pod {
+					deployment := &appsv1.Deployment{}
+					g.Expect(shootClient.Client().Get(ctx, client.ObjectKey{Name: "gardenlet", Namespace: "garden"}, deployment)).To(Succeed())
 
-				if ptr.Deref(deployment.Spec.Replicas, 0) != 0 {
-					By("Scale down gardenlet deployment to prevent interference of old pods with old validity settings")
-					// See https://github.com/gardener/gardener/issues/6766 for details
+					if ptr.Deref(deployment.Spec.Replicas, 0) != 0 {
+						By("Scale down gardenlet deployment to prevent interference of old pods with old validity settings")
+						// See https://github.com/gardener/gardener/issues/6766 for details
 
-					patch := client.MergeFrom(deployment.DeepCopy())
-					deployment.Spec.Replicas = ptr.To[int32](0)
-					g.Expect(shootClient.Client().Patch(ctx, deployment, patch)).To(Succeed())
-				}
+						patch := client.MergeFrom(deployment.DeepCopy())
+						deployment.Spec.Replicas = ptr.To[int32](0)
+						g.Expect(shootClient.Client().Patch(ctx, deployment, patch)).To(Succeed())
+					}
 
-				podList := &corev1.PodList{}
-				g.Expect(shootClient.Client().List(ctx, podList, client.InNamespace("garden"), client.MatchingLabels{"app": "gardener", "role": "gardenlet"})).To(Succeed())
-				return podList.Items
-			}).WithPolling(5 * time.Second).Should(BeEmpty())
+					podList := &corev1.PodList{}
+					g.Expect(shootClient.Client().List(ctx, podList, client.InNamespace("garden"), client.MatchingLabels{"app": "gardener", "role": "gardenlet"})).To(Succeed())
+					return podList.Items
+				}).WithPolling(5 * time.Second).Should(BeEmpty())
+			})
 
-			By("Update kubeconfig validity settings and trigger manual rotation so that gardenlet picks up new kubeconfig validity settings")
-			verifier.Before(ctx)
-			Eventually(func() error {
-				// This configuration will cause the gardenlet to automatically renew its client certificate roughly
-				// every 60s. The actual certificate is valid for 15m (even though we specify only 10m here) because
-				// kube-controller-manager backdates the issued certificate, see https://github.com/kubernetes/kubernetes/blob/252935368ab67f38cb252df0a961a6dcb81d20eb/pkg/controller/certificates/signer/signer.go#L197.
-				// ~40% * 15m =~ 6m. The jittering in gardenlet adds this to the time at which the certificate became
-				// valid and then renews it.
-				return patchGardenletKubeconfigValiditySettingsAndTriggerRotation(ctx, f.GardenClient.Client(), managedSeed, &gardenletv1alpha1.KubeconfigValidity{
-					Validity:                        &metav1.Duration{Duration: 10 * time.Minute},
-					AutoRotationJitterPercentageMin: ptr.To[int32](40),
-					AutoRotationJitterPercentageMax: ptr.To[int32](41),
-				})
+			It("Update kubeconfig validity settings and trigger manual rotation so that gardenlet picks up new kubeconfig validity settings", func() {
+				verifier.Before(ctx)
+				Eventually(func() error {
+					// This configuration will cause the gardenlet to automatically renew its client certificate roughly
+					// every 60s. The actual certificate is valid for 15m (even though we specify only 10m here) because
+					// kube-controller-manager backdates the issued certificate, see https://github.com/kubernetes/kubernetes/blob/252935368ab67f38cb252df0a961a6dcb81d20eb/pkg/controller/certificates/signer/signer.go#L197.
+					// ~40% * 15m =~ 6m. The jittering in gardenlet adds this to the time at which the certificate became
+					// valid and then renews it.
+					return patchGardenletKubeconfigValiditySettingsAndTriggerRotation(ctx, f.GardenClient.Client(), managedSeed, &gardenletv1alpha1.KubeconfigValidity{
+						Validity:                        &metav1.Duration{Duration: 10 * time.Minute},
+						AutoRotationJitterPercentageMin: ptr.To[int32](40),
+						AutoRotationJitterPercentageMax: ptr.To[int32](41),
+					})
+				}).Should(Succeed())
+				verifier.After(ctx, true)
+			})
+
+			It("Wait for kubeconfig auto-rotation to take place", func() {
+				// Now we can expect some auto-rotation happening within the next minute, so let's just wait for it.
+				verifier.Before(ctx)
+				verifier.After(ctx, false)
+			})
+
+			It("Revert kubeconfig validity settings", func() {
+				Eventually(func() error {
+					return patchGardenletKubeconfigValiditySettingsAndTriggerRotation(ctx, f.GardenClient.Client(), managedSeed, nil)
+				}).Should(Succeed())
+			})
+		})
+
+		It("Delete ManagedSeed", func() {
+			ctx, cancel = context.WithTimeout(parentCtx, 10*time.Minute)
+			defer cancel()
+
+			Eventually(func(g Gomega) {
+				g.Expect(client.IgnoreNotFound(f.GardenClient.Client().Delete(ctx, managedSeed))).To(Succeed())
 			}).Should(Succeed())
-			verifier.After(ctx, true)
+		})
 
-			// Now we can expect some auto-rotation happening within the next minute, so let's just wait for it.
-			By("Wait for kubeconfig auto-rotation to take place")
-			verifier.Before(ctx)
-			verifier.After(ctx, false)
+		It("Wait for Seed to be deleted", func() {
+			ctx, cancel = context.WithTimeout(parentCtx, 10*time.Minute)
+			defer cancel()
 
-			By("Revert kubeconfig validity settings")
-			Eventually(func() error {
-				return patchGardenletKubeconfigValiditySettingsAndTriggerRotation(ctx, f.GardenClient.Client(), managedSeed, nil)
-			}).Should(Succeed())
-		}
-
-		By("Delete ManagedSeed")
-		ctx, cancel = context.WithTimeout(parentCtx, 10*time.Minute)
-		defer cancel()
-
-		Eventually(func(g Gomega) {
-			g.Expect(client.IgnoreNotFound(f.GardenClient.Client().Delete(ctx, managedSeed))).To(Succeed())
-		}).Should(Succeed())
-
-		By("Wait for Seed to be deleted")
-		ctx, cancel = context.WithTimeout(parentCtx, 10*time.Minute)
-		defer cancel()
-
-		CEventually(ctx, func() error {
-			if err := f.GardenClient.Client().Get(ctx, client.ObjectKeyFromObject(seed), seed); err != nil {
-				if apierrors.IsNotFound(err) {
-					return nil
+			CEventually(ctx, func() error {
+				if err := f.GardenClient.Client().Get(ctx, client.ObjectKeyFromObject(seed), seed); err != nil {
+					if apierrors.IsNotFound(err) {
+						return nil
+					}
+					return err
 				}
-				return err
-			}
 
-			var message = "last operation missing"
-			if lastOp := seed.Status.LastOperation; lastOp != nil {
-				message = lastOp.Description
-			}
-
-			return fmt.Errorf("seed %q is not deleted yet: %s", client.ObjectKeyFromObject(seed), message)
-		}).WithPolling(5 * time.Second).Should(Succeed())
-
-		By("Wait for ManagedSeed to be deleted")
-		ctx, cancel = context.WithTimeout(parentCtx, 10*time.Minute)
-		defer cancel()
-
-		CEventually(ctx, func() error {
-			if err := f.GardenClient.Client().Get(ctx, client.ObjectKeyFromObject(managedSeed), managedSeed); err != nil {
-				if apierrors.IsNotFound(err) {
-					return nil
+				var message = "last operation missing"
+				if lastOp := seed.Status.LastOperation; lastOp != nil {
+					message = lastOp.Description
 				}
-				return err
-			}
 
-			var conditionMessage = fmt.Sprintf("%q condition missing", seedmanagementv1alpha1.SeedRegistered)
-			if condition := helper.GetCondition(managedSeed.Status.Conditions, seedmanagementv1alpha1.SeedRegistered); condition != nil {
-				conditionMessage = condition.Message
-			}
+				return fmt.Errorf("seed %q is not deleted yet: %s", client.ObjectKeyFromObject(seed), message)
+			}).WithPolling(5 * time.Second).Should(Succeed())
+		})
 
-			return fmt.Errorf("ManagedSeed %q is not deleted yet: %s", client.ObjectKeyFromObject(managedSeed), conditionMessage)
-		}).WithPolling(5 * time.Second).Should(Succeed())
+		It("Wait for ManagedSeed to be deleted", func() {
+			ctx, cancel = context.WithTimeout(parentCtx, 10*time.Minute)
+			defer cancel()
 
-		By("Delete Shoot")
-		ctx, cancel = context.WithTimeout(parentCtx, 20*time.Minute)
-		defer cancel()
-		Expect(f.DeleteShootAndWaitForDeletion(ctx, f.Shoot)).To(Succeed())
+			CEventually(ctx, func() error {
+				if err := f.GardenClient.Client().Get(ctx, client.ObjectKeyFromObject(managedSeed), managedSeed); err != nil {
+					if apierrors.IsNotFound(err) {
+						return nil
+					}
+					return err
+				}
+
+				var conditionMessage = fmt.Sprintf("%q condition missing", seedmanagementv1alpha1.SeedRegistered)
+				if condition := helper.GetCondition(managedSeed.Status.Conditions, seedmanagementv1alpha1.SeedRegistered); condition != nil {
+					conditionMessage = condition.Message
+				}
+
+				return fmt.Errorf("ManagedSeed %q is not deleted yet: %s", client.ObjectKeyFromObject(managedSeed), conditionMessage)
+			}).WithPolling(5 * time.Second).Should(Succeed())
+		})
+
+		It("Delete Shoot", func() {
+			ctx, cancel = context.WithTimeout(parentCtx, 20*time.Minute)
+			defer cancel()
+			Expect(f.DeleteShootAndWaitForDeletion(ctx, f.Shoot)).To(Succeed())
+		})
 	})
 })
 

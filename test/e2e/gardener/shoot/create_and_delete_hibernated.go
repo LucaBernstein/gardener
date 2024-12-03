@@ -25,20 +25,26 @@ var _ = Describe("Shoot Tests", Label("Shoot", "default"), func() {
 			Enabled: ptr.To(true),
 		}
 
-		It("Create and Delete Hibernated Shoot", Offset(1), Label("hibernated"), func() {
-			By("Create Shoot")
-			ctx, cancel := context.WithTimeout(parentCtx, 15*time.Minute)
-			defer cancel()
-			Expect(f.CreateShootAndWaitForCreation(ctx, false)).To(Succeed())
-			f.Verify()
+		Describe("Create and Delete Hibernated Shoot", Offset(1), Label("hibernated"), Ordered, func() {
+			var ctx context.Context
+			var cancel context.CancelFunc
 
-			By("Verify no running pods")
-			Expect(f.GardenerFramework.VerifyNoRunningPods(ctx, f.Shoot)).To(Succeed())
+			It("Create Shoot", func() {
+				ctx, cancel = context.WithTimeout(parentCtx, 15*time.Minute)
+				Expect(f.CreateShootAndWaitForCreation(ctx, false)).To(Succeed())
+				f.Verify()
+			})
 
-			By("Delete Shoot")
-			ctx, cancel = context.WithTimeout(parentCtx, 15*time.Minute)
-			defer cancel()
-			Expect(f.DeleteShootAndWaitForDeletion(ctx, f.Shoot)).To(Succeed())
+			It("Verify no running pods", func() {
+				defer cancel()
+				Expect(f.GardenerFramework.VerifyNoRunningPods(ctx, f.Shoot)).To(Succeed())
+			})
+
+			It("Delete Shoot", func() {
+				ctx, cancel = context.WithTimeout(parentCtx, 15*time.Minute)
+				defer cancel()
+				Expect(f.DeleteShootAndWaitForDeletion(ctx, f.Shoot)).To(Succeed())
+			})
 		})
 	}
 

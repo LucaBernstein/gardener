@@ -22,13 +22,13 @@ import (
 	. "github.com/gardener/gardener/pkg/utils/test/matchers"
 )
 
-var _ = Describe("Project Tests", Label("Project", "default"), func() {
+var _ = Describe("Project Tests", Label("Project", "default"), Ordered, func() {
 	var (
 		project             *gardencorev1beta1.Project
 		projectNamespaceKey client.ObjectKey
 	)
 
-	BeforeEach(func() {
+	BeforeAll(func() {
 		projectName := "test-" + utils.ComputeSHA256Hex([]byte(CurrentSpecReport().LeafNodeLocation.String()))[:5]
 
 		project = &gardencorev1beta1.Project{
@@ -42,7 +42,7 @@ var _ = Describe("Project Tests", Label("Project", "default"), func() {
 		projectNamespaceKey = client.ObjectKey{Name: *project.Spec.Namespace}
 	})
 
-	JustBeforeEach(func() {
+	BeforeAll(func() {
 		By("Create Project")
 		Expect(testClient.Create(ctx, project)).To(Succeed())
 		log.Info("Created Project", "project", client.ObjectKeyFromObject(project))
@@ -76,7 +76,7 @@ var _ = Describe("Project Tests", Label("Project", "default"), func() {
 			testUserClient client.Client
 		)
 
-		BeforeEach(func() {
+		BeforeAll(func() {
 			testUserName = project.Name
 			testUserConfig := rest.CopyConfig(restConfig)
 			// use impersonation to simulate different user
@@ -90,63 +90,71 @@ var _ = Describe("Project Tests", Label("Project", "default"), func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		JustBeforeEach(func() {
+		BeforeAll(func() {
 			waitForProjectPhase(gardencorev1beta1.ProjectReady)
 		})
 
-		It("should create and bind extension roles", func() {
-			By("Create test endpoints")
-			testEndpoints := &corev1.Endpoints{ObjectMeta: metav1.ObjectMeta{
-				GenerateName: "test-",
-				Namespace:    projectNamespaceKey.Name,
-			}}
-			Expect(testClient.Create(ctx, testEndpoints)).To(Succeed())
-			log.Info("Created Endpoints for test", "endpoints", client.ObjectKeyFromObject(testEndpoints))
+		Describe("should create and bind extension roles", func() {
+			var (
+				testEndpoints *corev1.Endpoints
+			)
+			It("Create test endpoints", func() {
+				testEndpoints := &corev1.Endpoints{ObjectMeta: metav1.ObjectMeta{
+					GenerateName: "test-",
+					Namespace:    projectNamespaceKey.Name,
+				}}
+				Expect(testClient.Create(ctx, testEndpoints)).To(Succeed())
+				log.Info("Created Endpoints for test", "endpoints", client.ObjectKeyFromObject(testEndpoints))
+			})
 
-			By("Ensure non-member doesn't have access to endpoints")
-			Consistently(func(g Gomega) {
-				g.Expect(testUserClient.Get(ctx, client.ObjectKeyFromObject(testEndpoints), testEndpoints)).To(BeForbiddenError())
-			}).Should(Succeed())
+			It("Ensure non-member doesn't have access to endpoints", func() {
+				Consistently(func(g Gomega) {
+					g.Expect(testUserClient.Get(ctx, client.ObjectKeyFromObject(testEndpoints), testEndpoints)).To(BeForbiddenError())
+				}).Should(Succeed())
+			})
 
-			By("Create Extension Role")
-			// use dedicated role name per test run
-			extensionClusterRole := &rbacv1.ClusterRole{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "gardener.cloud:extension:aggregate-to-test",
-					Labels: map[string]string{
-						"rbac.gardener.cloud/aggregate-to-extension-role": "e2e-test",
+			It("Create Extension Role", func() {
+				// use dedicated role name per test run
+				extensionClusterRole := &rbacv1.ClusterRole{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "gardener.cloud:extension:aggregate-to-test",
+						Labels: map[string]string{
+							"rbac.gardener.cloud/aggregate-to-extension-role": "e2e-test",
+						},
 					},
-				},
-				Rules: []rbacv1.PolicyRule{{
-					APIGroups: []string{""},
-					Resources: []string{"endpoints"},
-					Verbs:     []string{"get"},
-				}},
-			}
-			Expect(testClient.Create(ctx, extensionClusterRole)).To(Succeed())
-			log.Info("Created ClusterRole for test", "clusterRole", client.ObjectKeyFromObject(extensionClusterRole))
+					Rules: []rbacv1.PolicyRule{{
+						APIGroups: []string{""},
+						Resources: []string{"endpoints"},
+						Verbs:     []string{"get"},
+					}},
+				}
+				Expect(testClient.Create(ctx, extensionClusterRole)).To(Succeed())
+				log.Info("Created ClusterRole for test", "clusterRole", client.ObjectKeyFromObject(extensionClusterRole))
 
-			DeferCleanup(func() {
-				By("Delete Extension Role")
-				Expect(testClient.Delete(ctx, extensionClusterRole)).To(Or(Succeed(), BeNotFoundError()))
+				DeferCleanup(func() {
+					By("Delete Extension Role")
+					Expect(testClient.Delete(ctx, extensionClusterRole)).To(Or(Succeed(), BeNotFoundError()))
+				})
 			})
 
-			By("Add new member with extension role")
-			patch := client.MergeFrom(project.DeepCopy())
-			project.Spec.Members = append(project.Spec.Members, gardencorev1beta1.ProjectMember{
-				Subject: rbacv1.Subject{
-					APIGroup: rbacv1.GroupName,
-					Kind:     rbacv1.UserKind,
-					Name:     testUserName,
-				},
-				Role: "extension:e2e-test",
+			It("Add new member with extension role", func() {
+				patch := client.MergeFrom(project.DeepCopy())
+				project.Spec.Members = append(project.Spec.Members, gardencorev1beta1.ProjectMember{
+					Subject: rbacv1.Subject{
+						APIGroup: rbacv1.GroupName,
+						Kind:     rbacv1.UserKind,
+						Name:     testUserName,
+					},
+					Role: "extension:e2e-test",
+				})
+				Expect(testClient.Patch(ctx, project, patch)).To(Succeed())
 			})
-			Expect(testClient.Patch(ctx, project, patch)).To(Succeed())
 
-			By("Ensure new member has access to endpoints")
-			Eventually(func(g Gomega) {
-				g.Expect(testUserClient.Get(ctx, client.ObjectKeyFromObject(testEndpoints), testEndpoints)).To(Succeed())
-			}).Should(Succeed())
+			It("Ensure new member has access to endpoints", func() {
+				Eventually(func(g Gomega) {
+					g.Expect(testUserClient.Get(ctx, client.ObjectKeyFromObject(testEndpoints), testEndpoints)).To(Succeed())
+				}).Should(Succeed())
+			})
 		})
 	})
 })

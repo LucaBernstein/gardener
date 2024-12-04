@@ -21,7 +21,7 @@ func FCIt(text string, body func(context.Context), timeout time.Duration) {
 	ginkgo.FIt(text, contextify(body, timeout), timeout.Seconds())
 }
 
-// CAfterSuite contextifies Gingko's FIt
+// CAfterSuite contextifies Gingko's AfterSuite
 func CAfterSuite(body func(context.Context), timeout time.Duration) {
 	ginkgo.AfterSuite(contextify(body, timeout))
 }
@@ -31,7 +31,7 @@ func CAfterEach(body func(context.Context), timeout time.Duration) {
 	ginkgo.AfterEach(contextify(body, timeout), timeout.Seconds())
 }
 
-// CBeforeSuite contextifies Gingko's FIt
+// CBeforeSuite contextifies Gingko's BeforeSuite
 func CBeforeSuite(body func(context.Context), timeout time.Duration) {
 	ginkgo.BeforeSuite(contextify(body, timeout))
 }

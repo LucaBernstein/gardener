@@ -49,7 +49,6 @@ OIDC_METADATA              := $(TOOLS_BIN_DIR)/oidcmeta
 SETUP_ENVTEST              := $(TOOLS_BIN_DIR)/setup-envtest
 SKAFFOLD                   := $(TOOLS_BIN_DIR)/skaffold
 YQ                         := $(TOOLS_BIN_DIR)/yq
-VGOPATH                    := $(TOOLS_BIN_DIR)/vgopath
 TYPOS                      := $(TOOLS_BIN_DIR)/typos
 GOBUILDCACHE               := $(TOOLS_BIN_DIR)/gobuildcache
 
@@ -78,8 +77,6 @@ PROTOC_VERSION ?= v34.1
 SKAFFOLD_VERSION ?= v2.19.0
 # renovate: datasource=github-releases depName=mikefarah/yq
 YQ_VERSION ?= v4.53.2
-# renovate: datasource=github-releases depName=ironcore-dev/vgopath
-VGOPATH_VERSION ?= v0.1.10
 # renovate: datasource=github-releases depName=crate-ci/typos
 TYPOS_VERSION ?= v1.46.1
 GOBUILDCACHE_VERSION ?= 83bfeb837b93a786ff37b33d0be108bcc74b089f
@@ -118,6 +115,8 @@ tool_version_file = $(TOOLS_BIN_DIR)/.version_$(subst $(TOOLS_BIN_DIR)/,,$(1))_$
 # Use this function to get the version of a go module from go.mod
 version_gomod = $(shell go list -f '{{ .Version }}' -m $(1))
 
+go_tool_link = $(shell ln -snf $$(go tool -n $$(basename $(1))) $(1))
+
 # This target cleans up any previous version files for the given tool and creates the given version file.
 # This way, we can generically determine, which version was installed without calling each and every binary explicitly.
 $(TOOLS_BIN_DIR)/.version_%:
@@ -144,16 +143,16 @@ create-tools-bin: $(CONTROLLER_GEN) $(CRD_REF_DOCS) $(GINKGO) $(GOIMPORTS) $(GOI
 #########################################
 
 $(CONTROLLER_GEN): $(call tool_version_file,$(CONTROLLER_GEN),$(CONTROLLER_GEN_VERSION))
-	go build -o $(CONTROLLER_GEN) sigs.k8s.io/controller-tools/cmd/controller-gen
+	$(call go_tool_link,$(CONTROLLER_GEN))
 
 $(CRD_REF_DOCS): $(call tool_version_file,$(CRD_REF_DOCS),$(CRD_REF_DOCS_VERSION))
-	go build -o $(CRD_REF_DOCS) github.com/elastic/crd-ref-docs
+	$(call go_tool_link,$(CRD_REF_DOCS))
 
 $(GINKGO): $(call tool_version_file,$(GINKGO),$(GINKGO_VERSION))
-	go build -o $(GINKGO) github.com/onsi/ginkgo/v2/ginkgo
+	$(call go_tool_link,$(GINKGO))
 
 $(GOIMPORTS): $(call tool_version_file,$(GOIMPORTS),$(GOIMPORTS_VERSION))
-	go build -o $(GOIMPORTS) golang.org/x/tools/cmd/goimports
+	$(call go_tool_link,$(GOIMPORTS))
 
 $(GOIMPORTSREVISER): $(call tool_version_file,$(GOIMPORTSREVISER),$(GOIMPORTSREVISER_VERSION))
 	GOBIN=$(abspath $(TOOLS_BIN_DIR)) go install github.com/incu6us/goimports-reviser/v3@$(GOIMPORTSREVISER_VERSION)
@@ -173,7 +172,7 @@ $(GO_ADD_LICENSE):  $(call tool_version_file,$(GO_ADD_LICENSE),$(GO_ADD_LICENSE_
 	GOBIN=$(abspath $(TOOLS_BIN_DIR)) go install github.com/google/addlicense@$(GO_ADD_LICENSE_VERSION)
 
 $(GO_TO_PROTOBUF): $(call tool_version_file,$(GO_TO_PROTOBUF),$(CODE_GENERATOR_VERSION))
-	go build -o $(GO_TO_PROTOBUF) k8s.io/code-generator/cmd/go-to-protobuf
+	$(call go_tool_link,$(GO_TO_PROTOBUF))
 
 $(HELM): $(call tool_version_file,$(HELM),$(HELM_VERSION))
 	curl -sSfL https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-4 | HELM_INSTALL_DIR=$(TOOLS_BIN_DIR) USE_SUDO=false bash -s -- --version $(HELM_VERSION)
@@ -209,10 +208,10 @@ $(LOGCHECK): go.mod $(GOLANGCI_LINT)
 endif
 
 $(MOCKGEN): $(call tool_version_file,$(MOCKGEN),$(MOCKGEN_VERSION))
-	go build -o $(MOCKGEN) go.uber.org/mock/mockgen
+	$(call go_tool_link,$(MOCKGEN))
 
 $(OPENAPI_GEN): $(call tool_version_file,$(OPENAPI_GEN),$(OPENAPI_GEN_VERSION))
-	go build -o $(OPENAPI_GEN) k8s.io/kube-openapi/cmd/openapi-gen
+	$(call go_tool_link,$(OPENAPI_GEN))
 
 $(PROMTOOL): $(call tool_version_file,$(PROMTOOL),$(PROMTOOL_VERSION))
 	@PROMTOOL_VERSION=$(PROMTOOL_VERSION) $(TOOLS_PKG_PATH)/install-promtool.sh
@@ -224,7 +223,7 @@ $(TYPOS): $(call tool_version_file,$(TYPOS),$(TYPOS_VERSION))
 	@TYPOS_VERSION=$(TYPOS_VERSION) bash $(TOOLS_PKG_PATH)/install-typos.sh
 
 $(PROTOC_GEN_GOGO): $(call tool_version_file,$(PROTOC_GEN_GOGO),$(CODE_GENERATOR_VERSION))
-	go build -o $(PROTOC_GEN_GOGO) k8s.io/code-generator/cmd/go-to-protobuf/protoc-gen-gogo
+	$(call go_tool_link,$(PROTOC_GEN_GOGO))
 
 ifeq ($(IS_GARDENER),true)
 $(REPORT_COLLECTOR): $(TOOLS_PKG_PATH)/report-collector/*.go
@@ -261,10 +260,6 @@ $(SKAFFOLD): $(call tool_version_file,$(SKAFFOLD),$(SKAFFOLD_VERSION))
 $(YQ): $(call tool_version_file,$(YQ),$(YQ_VERSION))
 	curl -L -o $(YQ) https://github.com/mikefarah/yq/releases/download/$(YQ_VERSION)/yq_$(SYSTEM_NAME)_$(SYSTEM_ARCH)
 	chmod +x $(YQ)
-
-# TODO(LucaBernstein): Remove VGOPATH after gardener/gardener@v1.142 has been released.
-$(VGOPATH): $(call tool_version_file,$(VGOPATH),$(VGOPATH_VERSION))
-	go build -o $(VGOPATH) github.com/ironcore-dev/vgopath
 
 $(GOBUILDCACHE): $(call tool_version_file,$(GOBUILDCACHE),$(GOBUILDCACHE_VERSION))
 	GOBIN=$(abspath $(TOOLS_BIN_DIR)) go install github.com/saracen/gobuildcache@$(GOBUILDCACHE_VERSION)

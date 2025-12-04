@@ -112,6 +112,7 @@ docker-push:
 
 LOGCHECK_DIR := $(TOOLS_DIR)/logcheck
 PKG_APIS_DIR := $(REPO_ROOT)/pkg/apis
+TOOLS_MOD_DIR := $(REPO_ROOT)/hack/tools/mod
 
 .PHONY: tidy
 tidy:
@@ -119,6 +120,7 @@ tidy:
 	@GO111MODULE=on go mod tidy
 	@cd $(LOGCHECK_DIR); go mod tidy
 	@cd $(PKG_APIS_DIR); go mod tidy
+	@cd $(TOOLS_MOD_DIR); go mod tidy
 
 .PHONY: clean
 clean:
@@ -201,9 +203,9 @@ generate: tools-for-generate
 endif
 
 .PHONY: format
-format: $(GOIMPORTS) $(GOIMPORTSREVISER)
-	@MODE=$(MODE) ./hack/format.sh ./charts ./cmd ./extensions ./pkg ./plugin ./test ./hack
-	@cd $(LOGCHECK_DIR); $(abspath $(GOIMPORTS)) -l -w .
+format:
+	@REPO_ROOT=$(REPO_ROOT) MODE=$(MODE) ./hack/format.sh ./charts ./cmd ./extensions ./pkg ./plugin ./test ./hack
+	@REPO_ROOT=$(REPO_ROOT); source ./hack/tools/mod/aliases.sh; cd $(LOGCHECK_DIR); goimports -l -w .
 
 .PHONY: sast
 sast: $(GOSEC)

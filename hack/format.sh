@@ -6,6 +6,8 @@
 
 set -e
 
+source $REPO_ROOT/hack/tools/mod/aliases.sh
+
 echo "> Format"
 
 goimports -l -w $@

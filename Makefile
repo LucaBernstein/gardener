@@ -217,9 +217,9 @@ generate: tools-for-generate
 endif
 
 .PHONY: format
-format: $(GOIMPORTS) $(GOIMPORTSREVISER)
-	@./hack/format.sh ./charts ./cmd ./extensions ./pkg ./plugin ./test ./hack
-	@cd $(LOGCHECK_DIR); $(abspath $(GOIMPORTS)) -l -w .
+format:
+	@REPO_ROOT=$(REPO_ROOT) ./hack/format.sh ./charts ./cmd ./extensions ./pkg ./plugin ./test ./hack
+	@REPO_ROOT=$(REPO_ROOT); source ./hack/tools/mod/aliases.sh; cd $(LOGCHECK_DIR); goimports -l -w .
 
 .PHONY: sast
 sast: $(GOSEC)

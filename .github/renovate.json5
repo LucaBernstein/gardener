@@ -113,7 +113,7 @@
       ],
       postUpgradeTasks: {
         commands: [
-          'PATH="$PATH:$(go env GOROOT)/bin" make generate MODE=sequential',
+           'export PATH="$PATH:$(go env GOROOT)/bin"; make generate MODE=sequential',
         ],
         executionMode: 'branch',
       },

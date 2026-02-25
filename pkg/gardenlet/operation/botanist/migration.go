@@ -75,6 +75,12 @@ func (b *Botanist) IsCopyOfBackupsRequired(ctx context.Context) (bool, error) {
 		return false, nil
 	}
 
+	// Check if this is a force-restore operation on the same seed.
+	// In this case, we skip backup copying since we're using existing backups from the same backup bucket.
+	if b.Shoot.GetInfo().Annotations[v1beta1constants.GardenerOperation] == v1beta1constants.GardenerOperationForceRestore {
+		return false, nil
+	}
+
 	// First we check if the etcd-main Etcd resource has been created. This is only true if backups have been copied.
 	if _, err := b.Shoot.Components.ControlPlane.EtcdMain.Get(ctx); client.IgnoreNotFound(err) != nil {
 		return false, err

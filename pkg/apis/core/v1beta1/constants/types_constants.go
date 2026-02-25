@@ -237,6 +237,10 @@ const (
 	// GardenerOperationRestore is a constant for the value of the operation annotation describing a restoration
 	// operation.
 	GardenerOperationRestore = "restore"
+	// GardenerOperationForceRestore is a constant for the value of the operation annotation describing a force-restore
+	// operation that restores a Shoot control plane on a seed with the same name using existing ETCD backups
+	// without copying them. This is useful for disaster recovery of unmanaged seeds.
+	GardenerOperationForceRestore = "force-restore"
 	// GardenerOperationWaitForState is a constant for the value of the operation annotation describing a wait
 	// operation.
 	GardenerOperationWaitForState = "wait-for-state"

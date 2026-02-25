@@ -420,23 +420,6 @@ func (r *Reconciler) runMigrateShootFlow(ctx context.Context, o *operation.Opera
 			SkipIf:       !etcdSnapshotRequired,
 			Dependencies: flow.NewTaskIDs(syncPoint, waitUntilKubeAPIServerDeleted),
 		})
-
-		// Create additional source BE for BB retention
-		deploySourceBackupEntry = g.Add(flow.Task{
-			Name:         "Deploying source backup entry",
-			Fn:           botanist.DeploySourceBackupEntry,
-			Dependencies: flow.NewTaskIDs(createETCDSnapshot),
-		})
-		waitUntilSourceBackupEntryInGardenReconciled = g.Add(flow.Task{
-			Name:         "Waiting until the source backup entry has been reconciled",
-			Fn:           botanist.Shoot.Components.SourceBackupEntry.Wait,
-			Dependencies: flow.NewTaskIDs(deploySourceBackupEntry),
-		})
-
-		// TODO: Point BE to new Seed's backup bucket
-		// TODO: Reconcile BE
-		// TODO: Take another full snapshot
-
 		migrateBackupEntryInGarden = g.Add(flow.Task{
 			Name:         "Migrating BackupEntry to new seed",
 			Fn:           botanist.Shoot.Components.BackupEntry.Migrate,
@@ -457,9 +440,6 @@ func (r *Reconciler) runMigrateShootFlow(ctx context.Context, o *operation.Opera
 			Fn:           flow.TaskFn(botanist.WaitUntilEtcdsDeleted).RetryUntilTimeout(defaultInterval, defaultTimeout),
 			Dependencies: flow.NewTaskIDs(destroyEtcd),
 		})
-
-		// TODO: Delete source BE
-
 		deleteNamespace = g.Add(flow.Task{
 			Name:         "Deleting shoot namespace in Seed",
 			Fn:           flow.TaskFn(botanist.DeleteSeedNamespace).RetryUntilTimeout(defaultInterval, defaultTimeout),

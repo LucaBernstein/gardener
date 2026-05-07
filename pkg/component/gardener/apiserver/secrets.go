@@ -58,6 +58,7 @@ func (g *gardenerAPIServer) reconcileSecretServer(ctx context.Context) (*corev1.
 func (g *gardenerAPIServer) reconcileWorkloadIdentityKey(ctx context.Context) (*corev1.Secret, error) {
 	options := []secretsmanager.GenerateOption{
 		secretsmanager.Rotate(secretsmanager.KeepOld),
+		secretsmanager.Persist(),
 	}
 
 	if g.values.WorkloadIdentityKeyRotationPhase == gardencorev1beta1.RotationCompleting {

@@ -19,6 +19,7 @@ import (
 	"k8s.io/component-base/version/verflag"
 	"k8s.io/utils/clock"
 	"k8s.io/utils/ptr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
@@ -137,6 +138,15 @@ func run(ctx context.Context, cancel context.CancelFunc, log logr.Logger, cfg *o
 	log.Info("Perform Gardener version verification")
 	if err := bootstrappers.VerifyGardenerVersion(ctx, mgr.GetLogger(), mgr.GetAPIReader()); err != nil {
 		return fmt.Errorf("failed verifying Gardener version: %w", err)
+	}
+
+	log.Info("Check and restore garden-state if needed")
+	runtimeClient, err := client.New(restConfig, client.Options{Scheme: operatorclient.RuntimeScheme})
+	if err != nil {
+		return fmt.Errorf("failed creating runtime client for garden-state restore: %w", err)
+	}
+	if err := bootstrappers.RestoreGardenState(ctx, mgr.GetLogger(), runtimeClient, v1beta1constants.GardenNamespace); err != nil {
+		return fmt.Errorf("failed restoring garden-state: %w", err)
 	}
 
 	log.Info("Adding certificate management to manager")

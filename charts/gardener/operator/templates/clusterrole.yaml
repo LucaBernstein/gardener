@@ -20,6 +20,7 @@ rules:
   verbs:
   - get
   - list
+  - create
   - watch
   - patch
   - update
@@ -188,7 +189,10 @@ rules:
   resources:
   - backupbuckets
   - backupentries
+  - backupentries/status
   - dnsrecords
+  - dnsrecords/status
+  - extensions/status
   verbs:
   - get
   - list

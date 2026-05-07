@@ -84,10 +84,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 		return reconcile.Result{}, nil
 	}
 
-	operationType := gardencorev1beta1.LastOperationTypeReconcile
-	if garden.DeletionTimestamp != nil {
-		operationType = gardencorev1beta1.LastOperationTypeDelete
-	}
+	operationType := v1beta1helper.ComputeOperationType(garden.ObjectMeta, garden.Status.LastOperation)
 
 	if err := r.updateStatusOperationStart(ctx, garden, operationType); err != nil {
 		return reconcile.Result{}, r.updateStatusOperationError(ctx, garden, err, operationType)
@@ -324,10 +321,14 @@ func (r *Reconciler) updateStatusOperationSuccess(ctx context.Context, garden *o
 	)
 
 	switch operationType {
+	case gardencorev1beta1.LastOperationTypeCreate:
+		description = "Garden cluster has been successfully created."
 	case gardencorev1beta1.LastOperationTypeReconcile:
 		description = "Garden cluster has been successfully reconciled."
 	case gardencorev1beta1.LastOperationTypeDelete:
 		description = "Garden cluster has been successfully deleted."
+	case gardencorev1beta1.LastOperationTypeRestore:
+		description = "Garden cluster has been successfully restored."
 	}
 
 	garden.Status.LastOperation = &gardencorev1beta1.LastOperation{

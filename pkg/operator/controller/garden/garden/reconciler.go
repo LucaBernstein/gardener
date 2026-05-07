@@ -563,7 +563,7 @@ func nonAutoRotatedCACertConfigurations() []secretsutils.ConfigInterface {
 }
 
 func caCertGenerateOptionsFor(name string, rotationPhase gardencorev1beta1.CredentialsRotationPhase) []secretsmanager.GenerateOption {
-	options := []secretsmanager.GenerateOption{secretsmanager.Rotate(secretsmanager.KeepOld)}
+	options := []secretsmanager.GenerateOption{secretsmanager.Rotate(secretsmanager.KeepOld), secretsmanager.Persist()}
 
 	if name == operatorv1alpha1.SecretNameCARuntime || name == v1beta1constants.SecretNameCAVirtualGardenIstioBasicAuthServer {
 		options = append(options, secretsmanager.IgnoreOldSecretsAfter(24*time.Hour))

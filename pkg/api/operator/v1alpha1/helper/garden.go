@@ -334,3 +334,8 @@ func GetAllIngressDomains(garden *operatorv1alpha1.Garden) []operatorv1alpha1.DN
 
 	return allIngressDomains
 }
+
+// GardenHasOperationType returns true when the 'type' in the last operation matches the provided type.
+func GardenHasOperationType(lastOperation *gardencorev1beta1.LastOperation, lastOperationType gardencorev1beta1.LastOperationType) bool {
+	return lastOperation != nil && lastOperation.Type == lastOperationType
+}

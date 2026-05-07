@@ -69,6 +69,7 @@ import (
 	"github.com/gardener/gardener/pkg/controllerutils"
 	"github.com/gardener/gardener/pkg/extensions"
 	"github.com/gardener/gardener/pkg/features"
+	"github.com/gardener/gardener/pkg/operator/bootstrappers"
 	"github.com/gardener/gardener/pkg/utils"
 	"github.com/gardener/gardener/pkg/utils/flow"
 	gardenerutils "github.com/gardener/gardener/pkg/utils/gardener"
@@ -131,6 +132,18 @@ func (r *Reconciler) reconcile(
 	extensionList := &operatorv1alpha1.ExtensionList{}
 	if err := r.RuntimeClientSet.Client().List(ctx, extensionList); err != nil {
 		return err
+	}
+
+	var gardenState *operatorv1alpha1.GardenState
+	if isRestoringFromState(garden) {
+		gardenStateSecret, err := bootstrappers.GetGardenStateSecret(ctx, r.RuntimeClientSet.Client(), r.GardenNamespace)
+		if err != nil {
+			return fmt.Errorf("could not retrieve gardenstate for garden: %w", err)
+		}
+		gardenState, err = bootstrappers.DecodeGardenStateSecret(gardenStateSecret)
+		if err != nil {
+			return fmt.Errorf("could not retrieve gardenstate for garden: %w", err)
+		}
 	}
 
 	c, err := r.instantiateComponents(
@@ -239,7 +252,7 @@ func (r *Reconciler) reconcile(
 		})
 		_ = g.Add(flow.Task{
 			Name:         "Reconciling DNSRecords for virtual garden cluster and ingress controller",
-			Fn:           func(ctx context.Context) error { return r.reconcileDNSRecords(ctx, log, garden) },
+			Fn:           func(ctx context.Context) error { return r.reconcileDNSRecords(ctx, log, garden, gardenState) },
 			SkipIf:       garden.Spec.DNS == nil,
 			Dependencies: flow.NewTaskIDs(syncPointSystemComponents),
 		})
@@ -279,6 +292,9 @@ func (r *Reconciler) reconcile(
 				}
 
 				c.etcdMainBackupEntry.SetBackupBucketProviderStatus(backupBucket.Status.ProviderStatus)
+				if isRestoringFromState(garden) {
+					return component.RestoreAndWait(c.etcdMainBackupEntry)(ctx, gardenState)
+				}
 				return component.OpWait(c.etcdMainBackupEntry).Deploy(ctx)
 			},
 			SkipIf:       !backupConfigured || !backupEntryForGarden,
@@ -296,7 +312,12 @@ func (r *Reconciler) reconcile(
 		})
 		deployExtensionResourcesBeforeKAPI = g.Add(flow.Task{
 			Name: "Deploying extension resources before kube-apiserver",
-			Fn:   flow.TaskFn(c.extensions.DeployBeforeKubeAPIServer).RetryUntilTimeout(defaultInterval, defaultTimeout),
+			Fn: flow.TaskFn(func(ctx context.Context) error {
+				if isRestoringFromState(garden) {
+					return c.extensions.RestoreBeforeKubeAPIServer(ctx, gardenState)
+				}
+				return c.extensions.DeployBeforeKubeAPIServer(ctx)
+			}).RetryUntilTimeout(defaultInterval, defaultTimeout),
 		})
 		waitUntilExtensionResourcesBeforeKAPIReady = g.Add(flow.Task{
 			Name:         "Waiting until extension resources handled before kube-apiserver are ready",
@@ -430,8 +451,21 @@ func (r *Reconciler) reconcile(
 			Dependencies: flow.NewTaskIDs(waitUntilGardenerAPIServerReady, initializeVirtualClusterClient),
 		})
 		deployExtensionResources = g.Add(flow.Task{
-			Name:         "Deploying extension resources",
-			Fn:           flow.Parallel(c.extensions.DeployAfterKubeAPIServer, c.extensions.DeployAfterWorker).RetryUntilTimeout(defaultInterval, defaultTimeout),
+			Name: "Deploying extension resources",
+			Fn: flow.TaskFn(func(ctx context.Context) error {
+				if isRestoringFromState(garden) {
+					return flow.Parallel(
+						func(ctx context.Context) error {
+							return c.extensions.RestoreAfterKubeAPIServer(ctx, gardenState)
+						},
+						func(ctx context.Context) error {
+							return c.extensions.RestoreAfterWorker(ctx, gardenState)
+						},
+					)(ctx)
+				}
+
+				return flow.Parallel(c.extensions.DeployAfterKubeAPIServer, c.extensions.DeployAfterWorker)(ctx)
+			}).RetryUntilTimeout(defaultInterval, defaultTimeout),
 			Dependencies: flow.NewTaskIDs(initializeVirtualClusterClient),
 		})
 		_ = g.Add(flow.Task{
@@ -1321,7 +1355,7 @@ func (r *Reconciler) updateHelmChartRefForGardenlets(ctx context.Context, log lo
 	return nil
 }
 
-func (r *Reconciler) reconcileDNSRecords(ctx context.Context, log logr.Logger, garden *operatorv1alpha1.Garden) error {
+func (r *Reconciler) reconcileDNSRecords(ctx context.Context, log logr.Logger, garden *operatorv1alpha1.Garden, gardenState *operatorv1alpha1.GardenState) error {
 	dnsRecordList := &extensionsv1alpha1.DNSRecordList{}
 	if err := r.listManagedDNSRecords(ctx, dnsRecordList); err != nil {
 		return fmt.Errorf("failed listing DNS records: %w", err)
@@ -1353,7 +1387,7 @@ func (r *Reconciler) reconcileDNSRecords(ctx context.Context, log logr.Logger, g
 		staleDNSRecordNames.Delete(recordName)
 
 		taskFns = append(taskFns, func(ctx context.Context) error {
-			return component.OpWait(dnsrecord.New(
+			dnsRecord := dnsrecord.New(
 				log,
 				r.RuntimeClientSet.Client(),
 				&dnsrecord.Values{
@@ -1373,7 +1407,11 @@ func (r *Reconciler) reconcileDNSRecords(ctx context.Context, log logr.Logger, g
 				dnsrecord.DefaultSevereThreshold,
 				dnsrecord.DefaultTimeout,
 				nil, // with values.UseExistingSecret=true credentialsDeployer is not needed
-			)).Deploy(ctx)
+			)
+			if isRestoringFromState(garden) {
+				return component.RestoreAndWait(dnsRecord)(ctx, gardenState)
+			}
+			return component.OpWait(dnsRecord).Deploy(ctx)
 		})
 	}
 
@@ -1567,4 +1605,9 @@ func (r *Reconciler) getAggregatePrometheusIngressHost(ctx context.Context) (str
 	}
 
 	return ingress.Spec.Rules[0].Host, nil
+}
+
+// isRestoringFromState returns true when the shoot is in phase 'restore'.
+func isRestoringFromState(garden *operatorv1alpha1.Garden) bool {
+	return helper.GardenHasOperationType(garden.Status.LastOperation, gardencorev1beta1.LastOperationTypeRestore)
 }

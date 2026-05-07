@@ -13,7 +13,7 @@ import (
 	context "context"
 	reflect "reflect"
 
-	v1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
+	component "github.com/gardener/gardener/pkg/component"
 	extension "github.com/gardener/gardener/pkg/component/extensions/extension"
 	gomock "go.uber.org/mock/gomock"
 )
@@ -197,35 +197,35 @@ func (mr *MockInterfaceMockRecorder) MigrateBeforeKubeAPIServer(ctx any) *gomock
 }
 
 // RestoreAfterKubeAPIServer mocks base method.
-func (m *MockInterface) RestoreAfterKubeAPIServer(ctx context.Context, shootState *v1beta1.ShootState) error {
+func (m *MockInterface) RestoreAfterKubeAPIServer(ctx context.Context, state component.State) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "RestoreAfterKubeAPIServer", ctx, shootState)
+	ret := m.ctrl.Call(m, "RestoreAfterKubeAPIServer", ctx, state)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // RestoreAfterKubeAPIServer indicates an expected call of RestoreAfterKubeAPIServer.
-func (mr *MockInterfaceMockRecorder) RestoreAfterKubeAPIServer(ctx, shootState any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) RestoreAfterKubeAPIServer(ctx, state any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RestoreAfterKubeAPIServer", reflect.TypeOf((*MockInterface)(nil).RestoreAfterKubeAPIServer), ctx, shootState)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RestoreAfterKubeAPIServer", reflect.TypeOf((*MockInterface)(nil).RestoreAfterKubeAPIServer), ctx, state)
 }
 
 // RestoreAfterWorker mocks base method.
-func (m *MockInterface) RestoreAfterWorker(ctx context.Context, shootState *v1beta1.ShootState) error {
+func (m *MockInterface) RestoreAfterWorker(ctx context.Context, state component.State) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "RestoreAfterWorker", ctx, shootState)
+	ret := m.ctrl.Call(m, "RestoreAfterWorker", ctx, state)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // RestoreAfterWorker indicates an expected call of RestoreAfterWorker.
-func (mr *MockInterfaceMockRecorder) RestoreAfterWorker(ctx, shootState any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) RestoreAfterWorker(ctx, state any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RestoreAfterWorker", reflect.TypeOf((*MockInterface)(nil).RestoreAfterWorker), ctx, shootState)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RestoreAfterWorker", reflect.TypeOf((*MockInterface)(nil).RestoreAfterWorker), ctx, state)
 }
 
 // RestoreBeforeKubeAPIServer mocks base method.
-func (m *MockInterface) RestoreBeforeKubeAPIServer(arg0 context.Context, arg1 *v1beta1.ShootState) error {
+func (m *MockInterface) RestoreBeforeKubeAPIServer(arg0 context.Context, arg1 component.State) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "RestoreBeforeKubeAPIServer", arg0, arg1)
 	ret0, _ := ret[0].(error)

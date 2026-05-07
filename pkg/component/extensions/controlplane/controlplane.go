@@ -14,7 +14,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 	"github.com/gardener/gardener/pkg/component"
@@ -134,7 +133,7 @@ func (c *controlPlane) deploy(ctx context.Context, operation string) (extensions
 }
 
 // Restore uses the seed client and the ShootState to create the ControlPlane resources and restore their state.
-func (c *controlPlane) Restore(ctx context.Context, shootState *gardencorev1beta1.ShootState) error {
+func (c *controlPlane) Restore(ctx context.Context, shootState component.State) error {
 	return extensions.RestoreExtensionWithDeployFunction(
 		ctx,
 		c.client,

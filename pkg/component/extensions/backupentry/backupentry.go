@@ -15,7 +15,6 @@ import (
 	"k8s.io/utils/clock"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 	"github.com/gardener/gardener/pkg/component"
@@ -133,7 +132,7 @@ func (b *backupEntry) deploy(ctx context.Context, operation string) (extensionsv
 
 // Restore uses the seed client and the ShootState to create the BackupEntry custom resource in the Seed and restore its
 // state.
-func (b *backupEntry) Restore(ctx context.Context, shootState *gardencorev1beta1.ShootState) error {
+func (b *backupEntry) Restore(ctx context.Context, shootState component.State) error {
 	return extensions.RestoreExtensionWithDeployFunction(
 		ctx,
 		b.client,

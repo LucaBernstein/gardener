@@ -28,7 +28,7 @@ type Waiter interface {
 
 // Migrator is used to control the control-plane migration operations of a component.
 type Migrator interface {
-	Restore(ctx context.Context, shootState *v1beta1.ShootState) error
+	Restore(ctx context.Context, state State) error
 	Migrate(ctx context.Context) error
 }
 
@@ -65,3 +65,13 @@ type IstioConfigInterface interface {
 
 // CentralLoggingConfiguration is a function alias for returning configuration for the central logging.
 type CentralLoggingConfiguration func() (CentralLoggingConfig, error)
+
+// State contains the functions for restoring persisted state on restore.
+type State interface {
+	// GetGardenerResources returns the list of gardener resources to be restored from state.
+	GetGardenerResources() []v1beta1.GardenerResourceData
+	// GetExtensions returns the list of extension resources to be restored from state.
+	GetExtensions() []v1beta1.ExtensionResourceState
+	// GetResources returns the list of resources to be restored from state.
+	GetResources() []v1beta1.ResourceData
+}

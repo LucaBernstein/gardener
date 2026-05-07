@@ -243,7 +243,7 @@ func (d *dnsRecord) deploySecret(ctx context.Context) error {
 }
 
 // Restore uses the seed client and the ShootState to create the DNSRecord resource and restore its state.
-func (d *dnsRecord) Restore(ctx context.Context, shootState *gardencorev1beta1.ShootState) error {
+func (d *dnsRecord) Restore(ctx context.Context, shootState component.State) error {
 	return extensions.RestoreExtensionWithDeployFunction(
 		ctx,
 		d.client,

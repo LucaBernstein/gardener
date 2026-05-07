@@ -13,7 +13,7 @@ import (
 	context "context"
 	reflect "reflect"
 
-	v1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
+	component "github.com/gardener/gardener/pkg/component"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -268,17 +268,17 @@ func (mr *MockDeployMigrateWaiterMockRecorder) Migrate(ctx any) *gomock.Call {
 }
 
 // Restore mocks base method.
-func (m *MockDeployMigrateWaiter) Restore(ctx context.Context, shootState *v1beta1.ShootState) error {
+func (m *MockDeployMigrateWaiter) Restore(ctx context.Context, state component.State) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Restore", ctx, shootState)
+	ret := m.ctrl.Call(m, "Restore", ctx, state)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Restore indicates an expected call of Restore.
-func (mr *MockDeployMigrateWaiterMockRecorder) Restore(ctx, shootState any) *gomock.Call {
+func (mr *MockDeployMigrateWaiterMockRecorder) Restore(ctx, state any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Restore", reflect.TypeOf((*MockDeployMigrateWaiter)(nil).Restore), ctx, shootState)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Restore", reflect.TypeOf((*MockDeployMigrateWaiter)(nil).Restore), ctx, state)
 }
 
 // Wait mocks base method.

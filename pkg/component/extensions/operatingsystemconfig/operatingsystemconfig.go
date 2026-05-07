@@ -230,7 +230,7 @@ func (o *operatingSystemConfig) Deploy(ctx context.Context) error {
 
 // Restore uses the seed client and the ShootState to create the OperatingSystemConfig custom resources in the Shoot
 // namespace in the Seed and restore its state.
-func (o *operatingSystemConfig) Restore(ctx context.Context, shootState *gardencorev1beta1.ShootState) error {
+func (o *operatingSystemConfig) Restore(ctx context.Context, shootState component.State) error {
 	return o.reconcile(ctx, func(d deployer) error {
 		return extensions.RestoreExtensionWithDeployFunction(ctx, o.client, shootState, extensionsv1alpha1.OperatingSystemConfigResource, d.deploy)
 	})

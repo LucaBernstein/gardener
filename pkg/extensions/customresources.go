@@ -21,6 +21,7 @@ import (
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
+	"github.com/gardener/gardener/pkg/component"
 	"github.com/gardener/gardener/pkg/utils/flow"
 	gardenerutils "github.com/gardener/gardener/pkg/utils/gardener"
 	"github.com/gardener/gardener/pkg/utils/gardener/shootstate"
@@ -258,7 +259,7 @@ func WaitUntilExtensionObjectDeleted(
 func RestoreExtensionWithDeployFunction(
 	ctx context.Context,
 	c client.Client,
-	shootState *gardencorev1beta1.ShootState,
+	state component.State,
 	kind string,
 	deployFunc func(ctx context.Context, operationAnnotation string) (extensionsv1alpha1.Object, error),
 ) error {
@@ -267,7 +268,7 @@ func RestoreExtensionWithDeployFunction(
 		return err
 	}
 
-	if err := RestoreExtensionObjectState(ctx, c, shootState, extensionObj, kind); err != nil {
+	if err := RestoreExtensionObjectState(ctx, c, state, extensionObj, kind); err != nil {
 		return err
 	}
 
@@ -278,7 +279,7 @@ func RestoreExtensionWithDeployFunction(
 func RestoreExtensionObjectState(
 	ctx context.Context,
 	c client.Client,
-	shootState *gardencorev1beta1.ShootState,
+	state component.State,
 	extensionObj extensionsv1alpha1.Object,
 	kind string,
 ) error {
@@ -292,10 +293,10 @@ func RestoreExtensionObjectState(
 	}
 
 	var resourceRefs []autoscalingv1.CrossVersionObjectReference
-	if shootState.Spec.Extensions != nil {
+	if extensionStates := state.GetExtensions(); extensionStates != nil {
 		resourceName := extensionObj.GetName()
 		purpose := extensionObj.GetExtensionSpec().GetExtensionPurpose()
-		list := v1beta1helper.ExtensionResourceStateList(shootState.Spec.Extensions)
+		list := v1beta1helper.ExtensionResourceStateList(extensionStates)
 		if extensionResourceState := list.Get(kind, &resourceName, purpose); extensionResourceState != nil {
 			patch := client.MergeFrom(extensionObj.DeepCopyObject().(client.Object))
 			extensionStatus := extensionObj.GetExtensionStatus()
@@ -312,8 +313,8 @@ func RestoreExtensionObjectState(
 		}
 	}
 
-	if shootState.Spec.Resources != nil {
-		list := v1beta1helper.ResourceDataList(shootState.Spec.Resources)
+	if resources := state.GetResources(); resources != nil {
+		list := v1beta1helper.ResourceDataList(resources)
 		for _, resourceRef := range resourceRefs {
 			resourceData := list.Get(&resourceRef)
 			if resourceData != nil {
@@ -329,7 +330,7 @@ func RestoreExtensionObjectState(
 	}
 
 	if worker, ok := extensionObj.(*extensionsv1alpha1.Worker); ok {
-		if err := RestoreWorkerState(ctx, c, shootState, worker); err != nil {
+		if err := RestoreWorkerState(ctx, c, state, worker); err != nil {
 			return fmt.Errorf("failed restoring Worker state: %w", err)
 		}
 	}
@@ -343,15 +344,15 @@ func RestoreExtensionObjectState(
 // via the garden cluster, but passed to `gardenadm init` as a manifest in the config directory.
 // Therefore, the extension's Worker controller cannot fetch the ShootState and we need to pass the machine state
 // via the Worker.status.state here.
-func RestoreWorkerState(ctx context.Context, c client.Client, shootState *gardencorev1beta1.ShootState, worker *extensionsv1alpha1.Worker) error {
+func RestoreWorkerState(ctx context.Context, c client.Client, state component.State, worker *extensionsv1alpha1.Worker) error {
 	// Read machine state from ShootState gardener data.
-	var state []byte
-	gardenerData := v1beta1helper.GardenerResourceDataList(shootState.Spec.Gardener)
+	var machineData []byte
+	gardenerData := v1beta1helper.GardenerResourceDataList(state.GetGardenerResources())
 	if machineState := gardenerData.Get(v1beta1constants.DataTypeMachineState); machineState != nil && machineState.Type == v1beta1constants.DataTypeMachineState {
-		state = machineState.Data.Raw
+		machineData = machineState.Data.Raw
 	}
 
-	if len(state) == 0 {
+	if len(machineData) == 0 {
 		return nil
 	}
 
@@ -363,7 +364,7 @@ func RestoreWorkerState(ctx context.Context, c client.Client, shootState *garden
 	// Update namespaces in the machine state to the worker's namespace.
 	// This is necessary for `gardenadm bootstrap`, where the `Machines` are created in the shoot namespace in the
 	// bootstrap cluster, but restored in the kube-system namespace in the self-hosted shoot cluster.
-	machineState, err := shootstate.UnmarshalMachineState(state)
+	machineState, err := shootstate.UnmarshalMachineState(machineData)
 	if err != nil {
 		return err
 	}
@@ -377,14 +378,14 @@ func RestoreWorkerState(ctx context.Context, c client.Client, shootState *garden
 		}
 	}
 
-	state, err = shootstate.MarshalMachineState(machineState)
+	machineData, err = shootstate.MarshalMachineState(machineState)
 	if err != nil {
 		return err
 	}
 
 	// Patch the updated machine state into the Worker.status.state field.
 	patch := client.MergeFrom(worker.DeepCopy())
-	worker.Status.State = &runtime.RawExtension{Raw: state}
+	worker.Status.State = &runtime.RawExtension{Raw: machineData}
 	if err := c.Status().Patch(ctx, worker, patch); err != nil {
 		return fmt.Errorf("failed restoring worker state: %w", err)
 	}

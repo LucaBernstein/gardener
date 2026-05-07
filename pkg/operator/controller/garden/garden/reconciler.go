@@ -129,6 +129,10 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 		return reconcile.Result{}, err
 	}
 
+	if err := r.syncGardenState(ctx, log, garden); err != nil {
+		return reconcile.Result{}, fmt.Errorf("failed syncing garden-state: %w", err)
+	}
+
 	// ETCD encryption key rotation requires 2 reconciliations to complete. In prepared phase
 	// the encrypted data has been decrypted and re-encrypted with the new key, but the old key is still present.
 	// The second reconciliation will remove the old key and set the phase to completed.

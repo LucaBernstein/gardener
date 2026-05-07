@@ -6,7 +6,6 @@ package botanist
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"regexp"
 	"time"
@@ -21,10 +20,10 @@ import (
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 	securityv1alpha1 "github.com/gardener/gardener/pkg/apis/security/v1alpha1"
 	kubeapiserver "github.com/gardener/gardener/pkg/component/kubernetes/apiserver"
+	"github.com/gardener/gardener/pkg/component/state"
 	"github.com/gardener/gardener/pkg/controllerutils"
 	"github.com/gardener/gardener/pkg/utils/flow"
 	gardenerutils "github.com/gardener/gardener/pkg/utils/gardener"
-	shootstate "github.com/gardener/gardener/pkg/utils/gardener/shootstate"
 	"github.com/gardener/gardener/pkg/utils/gardener/tokenrequest"
 	kubernetesutils "github.com/gardener/gardener/pkg/utils/kubernetes"
 	secretsutils "github.com/gardener/gardener/pkg/utils/secrets"
@@ -41,7 +40,7 @@ func (b *Botanist) InitializeSecretsManagement(ctx context.Context) error {
 	// explicitly only done in case of restoration to prevent split-brain situations as described in
 	// https://github.com/gardener/gardener/issues/5377.
 	if b.IsRestorePhase() {
-		if err := b.restoreSecretsFromShootState(ctx); err != nil {
+		if err := state.RestoreSecrets(ctx, b.SeedClientSet.Client(), b.Shoot.GetShootState(), b.Shoot.ControlPlaneNamespace); err != nil {
 			return err
 		}
 	}
@@ -98,70 +97,6 @@ func (b *Botanist) lastSecretRotationStartTimes() map[string]time.Time {
 	}
 
 	return rotation
-}
-
-func (b *Botanist) restoreSecretsFromShootState(ctx context.Context) error {
-	var fns []flow.TaskFn
-
-	for _, v := range b.Shoot.GetShootState().Spec.Gardener {
-		entry := v
-
-		if entry.Type != v1beta1constants.DataTypeSecret {
-			continue
-		}
-
-		fns = append(fns, func(ctx context.Context) error {
-			objectMeta := metav1.ObjectMeta{
-				Name:      entry.Name,
-				Namespace: b.Shoot.ControlPlaneNamespace,
-				Labels:    entry.Labels,
-			}
-
-			return restoreSecretFromPersistedData(ctx, b.SeedClientSet.Client(), objectMeta, entry.Data.Raw)
-		})
-	}
-
-	return flow.Parallel(fns...)(ctx)
-}
-
-// restoreSecretFromPersistedData restores a Kubernetes Secret from persisted GardenerResourceData.
-// It handles both formats (with Immutable and Type fields) and (plain map[string][]byte)
-func restoreSecretFromPersistedData(ctx context.Context, seedClient client.Client, objectMeta metav1.ObjectMeta, rawData []byte) error {
-	var newSecretInfo shootstate.SecretState
-
-	var (
-		secretData map[string][]byte
-		immutable  *bool
-		secretType = corev1.SecretTypeOpaque
-	)
-
-	if err := json.Unmarshal(rawData, &newSecretInfo); err != nil || newSecretInfo.Data == nil {
-		// TODO(tobschli): Remove this fallback after v1.143 has been released, as ShootStates will be reconciled and use the new format.
-		// plain map[string][]byte
-		if err := json.Unmarshal(rawData, &secretData); err != nil {
-			return fmt.Errorf("failed unmarshalling secret data for secret %s: neither new nor old format matched: %w", objectMeta.Name, err)
-		}
-
-		if objectMeta.Labels[secretsmanager.LabelKeyManagedBy] == secretsmanager.LabelValueSecretsManager {
-			secret := secretsmanager.Secret(objectMeta, secretData)
-			return client.IgnoreAlreadyExists(seedClient.Create(ctx, secret))
-		}
-	} else {
-		secretData = newSecretInfo.Data
-		immutable = newSecretInfo.Immutable
-		if newSecretInfo.Type != "" {
-			secretType = newSecretInfo.Type
-		}
-	}
-
-	secret := &corev1.Secret{
-		ObjectMeta: objectMeta,
-		Type:       secretType,
-		Data:       secretData,
-		Immutable:  immutable,
-	}
-
-	return client.IgnoreAlreadyExists(seedClient.Create(ctx, secret))
 }
 
 func caCertConfigurations(isWorkerless, isSelfHosted bool) []secretsutils.ConfigInterface {

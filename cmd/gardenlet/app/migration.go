@@ -19,6 +19,7 @@ import (
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
 	seedmanagementv1alpha1 "github.com/gardener/gardener/pkg/apis/seedmanagement/v1alpha1"
+	"github.com/gardener/gardener/pkg/component/state"
 	"github.com/gardener/gardener/pkg/features"
 	"github.com/gardener/gardener/pkg/utils/flow"
 	"github.com/gardener/gardener/pkg/utils/gardener/shootstate"
@@ -126,18 +127,18 @@ func migrateShootStateSecretFormat(ctx context.Context, gardenClient client.Clie
 					continue
 				}
 
-				var newFormat shootstate.SecretState
+				var newFormat state.SecretState
 				if err := json.Unmarshal(entry.Data.Raw, &newFormat); err == nil && newFormat.Data != nil {
 					continue
 				}
-				newFormat = shootstate.SecretState{}
+				newFormat = state.SecretState{}
 
 				var oldFormat map[string][]byte
 				if err := json.Unmarshal(entry.Data.Raw, &oldFormat); err != nil {
 					return fmt.Errorf("failed to unmarshal secret data for secret %s in ShootState %s: %w", entry.Name, client.ObjectKeyFromObject(shootState), err)
 				}
 
-				newFormat = shootstate.SecretState{
+				newFormat = state.SecretState{
 					Data: oldFormat,
 					Type: corev1.SecretTypeOpaque,
 				}

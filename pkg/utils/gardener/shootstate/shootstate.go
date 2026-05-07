@@ -6,36 +6,23 @@ package shootstate
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"time"
 
-	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/utils/clock"
-	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	v1beta1helper "github.com/gardener/gardener/pkg/api/core/v1beta1/helper"
-	apiextensions "github.com/gardener/gardener/pkg/api/extensions"
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
+	"github.com/gardener/gardener/pkg/component/state"
 	"github.com/gardener/gardener/pkg/controllerutils"
 	gardenerutils "github.com/gardener/gardener/pkg/utils/gardener"
-	unstructuredutils "github.com/gardener/gardener/pkg/utils/kubernetes/unstructured"
-	secretsmanager "github.com/gardener/gardener/pkg/utils/secrets/manager"
 )
-
-// SecretState stores the data, immutability and type of a secret to be persisted in the ShootState.
-type SecretState struct {
-	Data      map[string][]byte `json:"data"`
-	Immutable *bool             `json:"immutable,omitempty"`
-	Type      corev1.SecretType `json:"type,omitempty"`
-}
 
 // Deploy deploys the ShootState resource with the effective state for the given shoot into the garden
 // cluster.
@@ -107,8 +94,19 @@ func computeSpec(ctx context.Context, seedClient client.Client, controlPlaneName
 	if err != nil {
 		return nil, fmt.Errorf("failed computing Gardener data: %w", err)
 	}
-
-	extensions, resources, err := computeExtensionsDataAndResources(ctx, seedClient, controlPlaneNamespace)
+	crds := []state.TargetCRD{
+		{extensionsv1alpha1.BackupEntryResource, func() client.ObjectList { return &extensionsv1alpha1.BackupEntryList{} }},
+		{extensionsv1alpha1.ContainerRuntimeResource, func() client.ObjectList { return &extensionsv1alpha1.ContainerRuntimeList{} }},
+		{extensionsv1alpha1.ControlPlaneResource, func() client.ObjectList { return &extensionsv1alpha1.ControlPlaneList{} }},
+		{extensionsv1alpha1.DNSRecordResource, func() client.ObjectList { return &extensionsv1alpha1.DNSRecordList{} }},
+		{extensionsv1alpha1.ExtensionResource, func() client.ObjectList { return &extensionsv1alpha1.ExtensionList{} }},
+		{extensionsv1alpha1.InfrastructureResource, func() client.ObjectList { return &extensionsv1alpha1.InfrastructureList{} }},
+		{extensionsv1alpha1.NetworkResource, func() client.ObjectList { return &extensionsv1alpha1.NetworkList{} }},
+		{extensionsv1alpha1.OperatingSystemConfigResource, func() client.ObjectList { return &extensionsv1alpha1.OperatingSystemConfigList{} }},
+		{extensionsv1alpha1.SelfHostedShootExposureResource, func() client.ObjectList { return &extensionsv1alpha1.SelfHostedShootExposureList{} }},
+		{extensionsv1alpha1.WorkerResource, func() client.ObjectList { return &extensionsv1alpha1.WorkerList{} }},
+	}
+	extensions, resources, err := state.ComputeExtensionsDataAndResources(ctx, seedClient, controlPlaneNamespace, crds)
 	if err != nil {
 		return nil, fmt.Errorf("failed computing extensions data and resources: %w", err)
 	}
@@ -128,7 +126,7 @@ func computeGardenerData(
 	[]gardencorev1beta1.GardenerResourceData,
 	error,
 ) {
-	secretsToPersist, err := computeSecretsToPersist(ctx, seedClient, controlPlaneNamespace)
+	secretsToPersist, err := state.ComputeSecretsToPersist(ctx, seedClient, controlPlaneNamespace)
 	if err != nil {
 		return nil, err
 	}
@@ -154,126 +152,4 @@ func computeGardenerData(
 	}
 
 	return secretsToPersist, nil
-}
-
-func computeSecretsToPersist(
-	ctx context.Context,
-	seedClient client.Client,
-	controlPlaneNamespace string,
-) (
-	[]gardencorev1beta1.GardenerResourceData,
-	error,
-) {
-	secretList := &corev1.SecretList{}
-	if err := seedClient.List(ctx, secretList, client.InNamespace(controlPlaneNamespace), client.MatchingLabels{
-		secretsmanager.LabelKeyPersist: secretsmanager.LabelValueTrue,
-	}); err != nil {
-		return nil, fmt.Errorf("failed listing all secrets that must be persisted: %w", err)
-	}
-
-	dataList := make([]gardencorev1beta1.GardenerResourceData, 0, len(secretList.Items))
-
-	for _, secret := range secretList.Items {
-		secretInfo := SecretState{
-			Data:      secret.Data,
-			Immutable: secret.Immutable,
-			Type:      secret.Type,
-		}
-
-		dataJSON, err := json.Marshal(secretInfo)
-		if err != nil {
-			return nil, fmt.Errorf("failed marshalling secret data to JSON for secret %s: %w", client.ObjectKeyFromObject(&secret), err)
-		}
-
-		dataList = append(dataList, gardencorev1beta1.GardenerResourceData{
-			Name:   secret.Name,
-			Labels: secret.Labels,
-			Type:   v1beta1constants.DataTypeSecret,
-			Data:   runtime.RawExtension{Raw: dataJSON},
-		})
-	}
-
-	return dataList, nil
-}
-
-func computeExtensionsDataAndResources(
-	ctx context.Context,
-	seedClient client.Client,
-	controlPlaneNamespace string,
-) (
-	[]gardencorev1beta1.ExtensionResourceState,
-	[]gardencorev1beta1.ResourceData,
-	error,
-) {
-	var (
-		dataList  []gardencorev1beta1.ExtensionResourceState
-		resources []gardencorev1beta1.ResourceData
-	)
-
-	for _, extension := range []struct {
-		objKind           string
-		newObjectListFunc func() client.ObjectList
-	}{
-		{extensionsv1alpha1.BackupEntryResource, func() client.ObjectList { return &extensionsv1alpha1.BackupEntryList{} }},
-		{extensionsv1alpha1.ContainerRuntimeResource, func() client.ObjectList { return &extensionsv1alpha1.ContainerRuntimeList{} }},
-		{extensionsv1alpha1.ControlPlaneResource, func() client.ObjectList { return &extensionsv1alpha1.ControlPlaneList{} }},
-		{extensionsv1alpha1.DNSRecordResource, func() client.ObjectList { return &extensionsv1alpha1.DNSRecordList{} }},
-		{extensionsv1alpha1.ExtensionResource, func() client.ObjectList { return &extensionsv1alpha1.ExtensionList{} }},
-		{extensionsv1alpha1.InfrastructureResource, func() client.ObjectList { return &extensionsv1alpha1.InfrastructureList{} }},
-		{extensionsv1alpha1.NetworkResource, func() client.ObjectList { return &extensionsv1alpha1.NetworkList{} }},
-		{extensionsv1alpha1.OperatingSystemConfigResource, func() client.ObjectList { return &extensionsv1alpha1.OperatingSystemConfigList{} }},
-		{extensionsv1alpha1.SelfHostedShootExposureResource, func() client.ObjectList { return &extensionsv1alpha1.SelfHostedShootExposureList{} }},
-		{extensionsv1alpha1.WorkerResource, func() client.ObjectList { return &extensionsv1alpha1.WorkerList{} }},
-	} {
-		objList := extension.newObjectListFunc()
-		if err := seedClient.List(ctx, objList, client.InNamespace(controlPlaneNamespace)); err != nil {
-			return nil, nil, fmt.Errorf("failed to list extension resources of kind %s: %w", extension.objKind, err)
-		}
-
-		if err := meta.EachListItem(objList, func(obj runtime.Object) error {
-			extensionObj, err := apiextensions.Accessor(obj)
-			if err != nil {
-				return fmt.Errorf("failed accessing extension object: %w", err)
-			}
-
-			if extensionObj.GetDeletionTimestamp() != nil ||
-				(extensionObj.GetExtensionStatus().GetState() == nil && len(extensionObj.GetExtensionStatus().GetResources()) == 0) {
-				return nil
-			}
-
-			dataList = append(dataList, gardencorev1beta1.ExtensionResourceState{
-				Kind:      extension.objKind,
-				Name:      ptr.To(extensionObj.GetName()),
-				Purpose:   extensionObj.GetExtensionSpec().GetExtensionPurpose(),
-				State:     extensionObj.GetExtensionStatus().GetState(),
-				Resources: extensionObj.GetExtensionStatus().GetResources(),
-			})
-
-			for _, newResource := range extensionObj.GetExtensionStatus().GetResources() {
-				referencedObj, err := unstructuredutils.GetObjectByRef(ctx, seedClient, &newResource.ResourceRef, controlPlaneNamespace)
-				if err != nil {
-					return fmt.Errorf("failed reading referenced object %s: %w", client.ObjectKey{Name: newResource.ResourceRef.Name, Namespace: controlPlaneNamespace}, err)
-				}
-				if obj == nil {
-					return fmt.Errorf("object %v not found", newResource.ResourceRef)
-				}
-
-				raw := &runtime.RawExtension{}
-				if err := runtime.DefaultUnstructuredConverter.FromUnstructured(referencedObj, raw); err != nil {
-					return fmt.Errorf("failed converting referenced object %s to raw extension: %w", client.ObjectKey{Name: newResource.ResourceRef.Name, Namespace: controlPlaneNamespace}, err)
-				}
-
-				resources = append(resources, gardencorev1beta1.ResourceData{
-					CrossVersionObjectReference: newResource.ResourceRef,
-					Data:                        *raw,
-				})
-			}
-
-			return nil
-		}); err != nil {
-			return nil, nil, fmt.Errorf("failed computing extension data for kind %s: %w", extension.objKind, err)
-		}
-	}
-
-	return dataList, resources, nil
 }

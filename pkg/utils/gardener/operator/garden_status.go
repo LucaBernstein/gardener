@@ -15,7 +15,10 @@ import (
 func IsGardenSuccessfullyReconciled(garden *operatorv1alpha1.Garden) bool {
 	lastOp := garden.Status.LastOperation
 	return lastOp != nil &&
-		lastOp.Type == gardencorev1beta1.LastOperationTypeReconcile && lastOp.State == gardencorev1beta1.LastOperationStateSucceeded && lastOp.Progress == 100
+		lastOp.State == gardencorev1beta1.LastOperationStateSucceeded && lastOp.Progress == 100 &&
+		(lastOp.Type == gardencorev1beta1.LastOperationTypeReconcile ||
+			lastOp.Type == gardencorev1beta1.LastOperationTypeRestore ||
+			lastOp.Type == gardencorev1beta1.LastOperationTypeCreate)
 }
 
 // IsGardenUpToDate returns true if the garden status contains the same version the operator is running.

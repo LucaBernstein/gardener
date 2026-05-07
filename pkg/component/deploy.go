@@ -142,3 +142,13 @@ func MigrateAndWait(dw DeployMigrateWaiter) func(ctx context.Context) error {
 		return dw.WaitMigrate(ctx)
 	}
 }
+
+// RestoreAndWait returns a function that calls Restore with the given state and then Wait on the given DeployMigrateWaiter.
+func RestoreAndWait(dw DeployMigrateWaiter) func(ctx context.Context, state State) error {
+	return func(ctx context.Context, state State) error {
+		if err := dw.Restore(ctx, state); err != nil {
+			return err
+		}
+		return dw.Wait(ctx)
+	}
+}

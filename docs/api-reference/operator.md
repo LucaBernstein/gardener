@@ -17,6 +17,9 @@ Resource Types:
 <li>
 <a href="#garden">Garden</a>
 </li>
+<li>
+<a href="#gardenstate">GardenState</a>
+</li>
 </ul>
 
 <h3 id="admissiondeploymentspec">AdmissionDeploymentSpec
@@ -1757,7 +1760,7 @@ string
 
 
 <p>
-(<em>Appears on:</em><a href="#garden">Garden</a>)
+(<em>Appears on:</em><a href="#garden">Garden</a>, <a href="#gardenstategarden">GardenStateGarden</a>)
 </p>
 
 <p>
@@ -1836,12 +1839,166 @@ NamedResourceReference array
 </table>
 
 
+<h3 id="gardenstate">GardenState
+</h3>
+
+
+<p>
+GardenState describes a persisted state of the garden.
+</p>
+
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+
+<tr>
+<td>
+<code>metadata</code></br>
+<em>
+<a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.33/#objectmeta-v1-meta">ObjectMeta</a>
+</em>
+</td>
+<td>
+Refer to the Kubernetes API documentation for the fields of the <code>metadata</code> field.
+</td>
+</tr>
+<tr>
+<td>
+<code>gardener</code></br>
+<em>
+GardenerResourceData array
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Gardener holds the data required to restore resources deployed by the garden operator.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>garden</code></br>
+<em>
+<a href="#gardenstategarden">GardenStateGarden</a>
+</em>
+</td>
+<td>
+<p>Garden holds the garden resource state needed for restore.</p>
+</td>
+</tr>
+
+</tbody>
+</table>
+
+
+<h3 id="gardenstategarden">GardenStateGarden
+</h3>
+
+
+<p>
+(<em>Appears on:</em><a href="#gardenstate">GardenState</a>)
+</p>
+
+<p>
+GardenStateGarden contains the Garden resource data persisted in a GardenState.
+It uses explicit metadata fields instead of embedding ObjectMeta, because nested ObjectMeta
+gets pruned by CRD structural schema validation.
+</p>
+
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+
+<tr>
+<td>
+<code>name</code></br>
+<em>
+string
+</em>
+</td>
+<td>
+<p>Name is the name of the Garden resource.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>labels</code></br>
+<em>
+object (keys:string, values:string)
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Labels are the labels of the Garden resource.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>annotations</code></br>
+<em>
+object (keys:string, values:string)
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Annotations are the annotations of the Garden resource.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>uid</code></br>
+<em>
+string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>UID is the UID of the Garden resource. It is needed during restore to preserve the etcd<br />backup bucket name which defaults to "garden-<UID>".</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>spec</code></br>
+<em>
+<a href="#gardenspec">GardenSpec</a>
+</em>
+</td>
+<td>
+<p>Spec is the spec of the Garden resource.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>status</code></br>
+<em>
+<a href="#gardenstatus">GardenStatus</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Status is the status of the Garden resource.</p>
+</td>
+</tr>
+
+</tbody>
+</table>
+
+
 <h3 id="gardenstatus">GardenStatus
 </h3>
 
 
 <p>
-(<em>Appears on:</em><a href="#garden">Garden</a>)
+(<em>Appears on:</em><a href="#garden">Garden</a>, <a href="#gardenstategarden">GardenStateGarden</a>)
 </p>
 
 <p>

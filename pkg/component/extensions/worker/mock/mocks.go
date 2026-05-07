@@ -13,8 +13,8 @@ import (
 	context "context"
 	reflect "reflect"
 
-	v1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	v1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
+	component "github.com/gardener/gardener/pkg/component"
 	operatingsystemconfig "github.com/gardener/gardener/pkg/component/extensions/operatingsystemconfig"
 	gomock "go.uber.org/mock/gomock"
 	runtime "k8s.io/apimachinery/pkg/runtime"
@@ -116,17 +116,17 @@ func (mr *MockInterfaceMockRecorder) Migrate(ctx any) *gomock.Call {
 }
 
 // Restore mocks base method.
-func (m *MockInterface) Restore(ctx context.Context, shootState *v1beta1.ShootState) error {
+func (m *MockInterface) Restore(ctx context.Context, state component.State) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Restore", ctx, shootState)
+	ret := m.ctrl.Call(m, "Restore", ctx, state)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Restore indicates an expected call of Restore.
-func (mr *MockInterfaceMockRecorder) Restore(ctx, shootState any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) Restore(ctx, state any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Restore", reflect.TypeOf((*MockInterface)(nil).Restore), ctx, shootState)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Restore", reflect.TypeOf((*MockInterface)(nil).Restore), ctx, state)
 }
 
 // SetInfrastructureProviderStatus mocks base method.

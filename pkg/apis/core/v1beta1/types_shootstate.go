@@ -97,3 +97,15 @@ type ResourceData struct {
 	// +required
 	Data runtime.RawExtension `json:"data" protobuf:"bytes,2,opt,name=data"`
 }
+
+func (s *ShootState) GetGardenerResources() []GardenerResourceData {
+	return s.Spec.Gardener
+}
+
+func (s *ShootState) GetExtensions() []ExtensionResourceState {
+	return s.Spec.Extensions
+}
+
+func (s *ShootState) GetResources() []ResourceData {
+	return s.Spec.Resources
+}

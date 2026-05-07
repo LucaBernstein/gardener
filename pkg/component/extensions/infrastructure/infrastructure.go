@@ -159,7 +159,7 @@ func (i *infrastructure) deploy(ctx context.Context, operation string) (extensio
 }
 
 // Restore uses the seed client and the ShootState to create the Infrastructure resources and restore their state.
-func (i *infrastructure) Restore(ctx context.Context, shootState *gardencorev1beta1.ShootState) error {
+func (i *infrastructure) Restore(ctx context.Context, shootState component.State) error {
 	return extensions.RestoreExtensionWithDeployFunction(
 		ctx,
 		i.client,

@@ -140,7 +140,7 @@ func (c *containerRuntime) WaitCleanup(ctx context.Context) error {
 }
 
 // Restore uses the seed client and the ShootState to create the ContainerRuntime resources and restore their state.
-func (c *containerRuntime) Restore(ctx context.Context, shootState *gardencorev1beta1.ShootState) error {
+func (c *containerRuntime) Restore(ctx context.Context, shootState component.State) error {
 	fns := c.forEachContainerRuntime(func(ctx context.Context, cr *extensionsv1alpha1.ContainerRuntime, coreCR gardencorev1beta1.ContainerRuntime, workerName string) error {
 		return extensions.RestoreExtensionWithDeployFunction(ctx, c.client, shootState, extensionsv1alpha1.ContainerRuntimeResource, func(ctx context.Context, operationAnnotation string) (extensionsv1alpha1.Object, error) {
 			return c.deploy(ctx, cr, coreCR, workerName, operationAnnotation)

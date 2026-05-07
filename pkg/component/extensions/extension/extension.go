@@ -20,6 +20,7 @@ import (
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
+	"github.com/gardener/gardener/pkg/component"
 	"github.com/gardener/gardener/pkg/controllerutils"
 	"github.com/gardener/gardener/pkg/extensions"
 	"github.com/gardener/gardener/pkg/utils/flow"
@@ -59,21 +60,21 @@ type Interface interface {
 	// DeployBeforeKubeAPIServer deploys extensions that should be handled before the kube-apiserver.
 	DeployBeforeKubeAPIServer(context.Context) error
 	// RestoreBeforeKubeAPIServer restores extensions that should be handled before the kube-apiserver.
-	RestoreBeforeKubeAPIServer(context.Context, *gardencorev1beta1.ShootState) error
+	RestoreBeforeKubeAPIServer(context.Context, component.State) error
 	// WaitBeforeKubeAPIServer waits until all extensions that should be handled before the kube-apiserver are deployed and report readiness.
 	WaitBeforeKubeAPIServer(context.Context) error
 
 	// DeployAfterKubeAPIServer deploys extensions that should be handled after the kube-apiserver.
 	DeployAfterKubeAPIServer(ctx context.Context) error
 	// RestoreAfterKubeAPIServer restores extensions that should be handled after the kube-apiserver.
-	RestoreAfterKubeAPIServer(ctx context.Context, shootState *gardencorev1beta1.ShootState) error
+	RestoreAfterKubeAPIServer(ctx context.Context, state component.State) error
 	// WaitAfterKubeAPIServer waits until all extensions that should be handled after the kube-apiserver are deployed and report readiness.
 	WaitAfterKubeAPIServer(ctx context.Context) error
 
 	// DeployAfterWorker deploys extensions that should be handled after the workers.
 	DeployAfterWorker(ctx context.Context) error
 	// RestoreAfterWorker restores extensions that should be handled after the workers.
-	RestoreAfterWorker(ctx context.Context, shootState *gardencorev1beta1.ShootState) error
+	RestoreAfterWorker(ctx context.Context, state component.State) error
 	// WaitAfterWorker waits until all extensions that should be handled after the workers are deployed and report readiness.
 	WaitAfterWorker(ctx context.Context) error
 
@@ -315,12 +316,12 @@ func (e *extension) WaitCleanupAfterKubeAPIServer(ctx context.Context) error {
 }
 
 // RestoreAfterKubeAPIServer uses the seed client and the ShootState to create the Extension resources that should be deployed after the kube-apiserver and restore their state.
-func (e *extension) RestoreAfterKubeAPIServer(ctx context.Context, shootState *gardencorev1beta1.ShootState) error {
+func (e *extension) RestoreAfterKubeAPIServer(ctx context.Context, state component.State) error {
 	fns := e.forEach(func(ctx context.Context, ext *extensionsv1alpha1.Extension, extType string, providerConfig *runtime.RawExtension, _ time.Duration) error {
 		return extensions.RestoreExtensionWithDeployFunction(
 			ctx,
 			e.client,
-			shootState,
+			state,
 			extensionsv1alpha1.ExtensionResource,
 			func(ctx context.Context, operationAnnotation string) (extensionsv1alpha1.Object, error) {
 				return e.deploy(ctx, ext, extType, providerConfig, operationAnnotation)
@@ -332,12 +333,12 @@ func (e *extension) RestoreAfterKubeAPIServer(ctx context.Context, shootState *g
 }
 
 // RestoreBeforeKubeAPIServer uses the seed client and the ShootState to create the Extension resources that should be deployed before the kube-apiserver and restore their state.
-func (e *extension) RestoreBeforeKubeAPIServer(ctx context.Context, shootState *gardencorev1beta1.ShootState) error {
+func (e *extension) RestoreBeforeKubeAPIServer(ctx context.Context, state component.State) error {
 	fns := e.forEach(func(ctx context.Context, ext *extensionsv1alpha1.Extension, extType string, providerConfig *runtime.RawExtension, _ time.Duration) error {
 		return extensions.RestoreExtensionWithDeployFunction(
 			ctx,
 			e.client,
-			shootState,
+			state,
 			extensionsv1alpha1.ExtensionResource,
 			func(ctx context.Context, operationAnnotation string) (extensionsv1alpha1.Object, error) {
 				return e.deploy(ctx, ext, extType, providerConfig, operationAnnotation)
@@ -349,12 +350,12 @@ func (e *extension) RestoreBeforeKubeAPIServer(ctx context.Context, shootState *
 }
 
 // RestoreAfterWorker uses the seed client and the ShootState to create the Extension resources that should be deployed after the workers and restore their state.
-func (e *extension) RestoreAfterWorker(ctx context.Context, shootState *gardencorev1beta1.ShootState) error {
+func (e *extension) RestoreAfterWorker(ctx context.Context, state component.State) error {
 	fns := e.forEach(func(ctx context.Context, ext *extensionsv1alpha1.Extension, extType string, providerConfig *runtime.RawExtension, _ time.Duration) error {
 		return extensions.RestoreExtensionWithDeployFunction(
 			ctx,
 			e.client,
-			shootState,
+			state,
 			extensionsv1alpha1.ExtensionResource,
 			func(ctx context.Context, operationAnnotation string) (extensionsv1alpha1.Object, error) {
 				return e.deploy(ctx, ext, extType, providerConfig, operationAnnotation)

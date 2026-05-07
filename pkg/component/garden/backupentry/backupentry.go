@@ -141,7 +141,7 @@ func (b *backupEntry) WaitMigrate(ctx context.Context) error {
 
 // Restore uses the garden client to update the BackupEntry and set the name of the new seed to which it shall be scheduled.
 // If the BackupEntry was deleted it will be recreated.
-func (b *backupEntry) Restore(ctx context.Context, _ *gardencorev1beta1.ShootState) error {
+func (b *backupEntry) Restore(ctx context.Context, _ component.State) error {
 	return b.reconcile(ctx, v1beta1constants.GardenerOperationRestore)
 }
 

@@ -383,6 +383,18 @@ func (r *Reconciler) reconcile(
 			Fn:           c.gardenerAPIServer.Wait,
 			Dependencies: flow.NewTaskIDs(deployGardenerAPIServer),
 		})
+		scaleEtcdAfterRestore = g.Add(flow.Task{
+			Name:         "Scaling main and events etcd after Gardener and Kubernetes API servers are ready",
+			Fn:           r.scaleEtcdsFunc(garden, c.etcdMain, c.etcdEvents),
+			SkipIf:       !isRestoringFromState(garden),
+			Dependencies: flow.NewTaskIDs(waitUntilEtcdsReady, waitUntilKubeAPIServerIsReady, waitUntilGardenerAPIServerReady),
+		})
+		_ = g.Add(flow.Task{
+			Name:         "Waiting until main and events etcd scaled up after Gardener and Kubernetes API servers are ready",
+			Fn:           flow.Parallel(c.etcdMain.Wait, c.etcdEvents.Wait),
+			SkipIf:       !isRestoringFromState(garden),
+			Dependencies: flow.NewTaskIDs(scaleEtcdAfterRestore),
+		})
 		deployGardenerAdmissionController = g.Add(flow.Task{
 			Name:         "Deploying Gardener Admission Controller",
 			Fn:           component.OpWait(c.gardenerAdmissionController).Deploy,
@@ -1001,7 +1013,29 @@ func (r *Reconciler) deployEtcdsFunc(garden *operatorv1alpha1.Garden, etcdMain, 
 			}
 		}
 
+		if isRestoringFromState(garden) {
+			for _, deploy := range []etcd.Interface{etcdMain, etcdEvents} {
+				deploy.SetReplicas(ptr.To[int32](1))
+			}
+		}
+
 		return flow.Parallel(etcdMain.Deploy, etcdEvents.Deploy)(ctx)
+	}
+}
+
+func (r *Reconciler) scaleEtcdsFunc(garden *operatorv1alpha1.Garden, etcdMain, etcdEvents etcd.Interface) func(context.Context) error {
+	return func(ctx context.Context) error {
+		var (
+			fns      []flow.TaskFn
+			replicas = getEtcdReplicas(garden)
+		)
+
+		for _, deploy := range []etcd.Interface{etcdMain, etcdEvents} {
+			deploy.SetReplicas(replicas)
+			fns = append(fns, func(ctc context.Context) error { return deploy.Scale(ctx, *replicas) })
+		}
+
+		return flow.Parallel(fns...)(ctx)
 	}
 }
 

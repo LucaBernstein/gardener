@@ -561,13 +561,6 @@ func (r *Reconciler) newEtcd(
 		return nil, err
 	}
 
-	highAvailabilityEnabled := helper.HighAvailabilityEnabled(garden)
-
-	replicas := ptr.To[int32](1)
-	if highAvailabilityEnabled {
-		replicas = ptr.To[int32](3)
-	}
-
 	return etcd.New(
 		log,
 		r.RuntimeClientSet.Client(),
@@ -577,7 +570,7 @@ func (r *Reconciler) newEtcd(
 			NamePrefix:                  operatorv1alpha1.VirtualGardenNamePrefix,
 			Role:                        role,
 			Class:                       class,
-			Replicas:                    replicas,
+			Replicas:                    getEtcdReplicas(garden),
 			Autoscaling:                 etcd.AutoscalingConfig{MinAllowed: minAllowed},
 			StorageCapacity:             storageCapacity,
 			StorageClassName:            storageClassName,
@@ -587,7 +580,7 @@ func (r *Reconciler) newEtcd(
 			MaintenanceTimeWindow:       garden.Spec.VirtualCluster.Maintenance.TimeWindow,
 			EvictionRequirement:         evictionRequirement,
 			PriorityClassName:           v1beta1constants.PriorityClassNameGardenSystem500,
-			HighAvailabilityEnabled:     highAvailabilityEnabled,
+			HighAvailabilityEnabled:     helper.HighAvailabilityEnabled(garden),
 			TopologyAwareRoutingEnabled: helper.TopologyAwareRoutingEnabled(garden.Spec.RuntimeCluster.Settings),
 		},
 	), nil
@@ -1813,4 +1806,11 @@ func (r *Reconciler) newEtcdMainBackupEntry(log logr.Logger, garden *operatorv1a
 
 func workloadIdentityTokenIssuerURL(garden *operatorv1alpha1.Garden) string {
 	return "https://" + helper.DiscoveryServerDomain(garden) + "/garden/workload-identity/issuer"
+}
+
+func getEtcdReplicas(garden *operatorv1alpha1.Garden) *int32 {
+	if helper.HighAvailabilityEnabled(garden) {
+		return ptr.To[int32](3)
+	}
+	return ptr.To[int32](1)
 }

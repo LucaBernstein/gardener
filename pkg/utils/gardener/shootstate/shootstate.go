@@ -23,18 +23,12 @@ import (
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
+	"github.com/gardener/gardener/pkg/component/state"
 	"github.com/gardener/gardener/pkg/controllerutils"
 	gardenerutils "github.com/gardener/gardener/pkg/utils/gardener"
 	unstructuredutils "github.com/gardener/gardener/pkg/utils/kubernetes/unstructured"
 	secretsmanager "github.com/gardener/gardener/pkg/utils/secrets/manager"
 )
-
-// SecretState stores the data, immutability and type of a secret to be persisted in the ShootState.
-type SecretState struct {
-	Data      map[string][]byte `json:"data"`
-	Immutable *bool             `json:"immutable,omitempty"`
-	Type      corev1.SecretType `json:"type,omitempty"`
-}
 
 // Deploy deploys the ShootState resource with the effective state for the given shoot into the garden
 // cluster.
@@ -109,8 +103,19 @@ func computeSpec(ctx context.Context, seedClient client.Client, controlPlaneName
 	if err != nil {
 		return nil, fmt.Errorf("failed computing Gardener data: %w", err)
 	}
-
-	extensions, resources, err := computeExtensionsDataAndResources(ctx, seedClient, controlPlaneNamespace)
+	crds := []state.TargetCRD{
+		{extensionsv1alpha1.BackupEntryResource, func() client.ObjectList { return &extensionsv1alpha1.BackupEntryList{} }},
+		{extensionsv1alpha1.ContainerRuntimeResource, func() client.ObjectList { return &extensionsv1alpha1.ContainerRuntimeList{} }},
+		{extensionsv1alpha1.ControlPlaneResource, func() client.ObjectList { return &extensionsv1alpha1.ControlPlaneList{} }},
+		{extensionsv1alpha1.DNSRecordResource, func() client.ObjectList { return &extensionsv1alpha1.DNSRecordList{} }},
+		{extensionsv1alpha1.ExtensionResource, func() client.ObjectList { return &extensionsv1alpha1.ExtensionList{} }},
+		{extensionsv1alpha1.InfrastructureResource, func() client.ObjectList { return &extensionsv1alpha1.InfrastructureList{} }},
+		{extensionsv1alpha1.NetworkResource, func() client.ObjectList { return &extensionsv1alpha1.NetworkList{} }},
+		{extensionsv1alpha1.OperatingSystemConfigResource, func() client.ObjectList { return &extensionsv1alpha1.OperatingSystemConfigList{} }},
+		{extensionsv1alpha1.SelfHostedShootExposureResource, func() client.ObjectList { return &extensionsv1alpha1.SelfHostedShootExposureList{} }},
+		{extensionsv1alpha1.WorkerResource, func() client.ObjectList { return &extensionsv1alpha1.WorkerList{} }},
+	}
+	extensions, resources, err := state.ComputeExtensionsDataAndResources(ctx, seedClient, controlPlaneNamespace, crds)
 	if err != nil {
 		return nil, fmt.Errorf("failed computing extensions data and resources: %w", err)
 	}
@@ -130,7 +135,7 @@ func computeGardenerData(
 	[]gardencorev1beta1.GardenerResourceData,
 	error,
 ) {
-	secretsToPersist, err := computeSecretsToPersist(ctx, seedClient, controlPlaneNamespace)
+	secretsToPersist, err := state.ComputeSecretsToPersist(ctx, seedClient, controlPlaneNamespace)
 	if err != nil {
 		return nil, err
 	}
@@ -176,7 +181,7 @@ func computeSecretsToPersist(
 	dataList := make([]gardencorev1beta1.GardenerResourceData, 0, len(secretList.Items))
 
 	for _, secret := range secretList.Items {
-		secretInfo := SecretState{
+		secretInfo := state.SecretState{
 			Data:      secret.Data,
 			Immutable: secret.Immutable,
 			Type:      secret.Type,

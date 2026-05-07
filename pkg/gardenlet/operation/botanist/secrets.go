@@ -22,10 +22,10 @@ import (
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 	securityv1alpha1 "github.com/gardener/gardener/pkg/apis/security/v1alpha1"
 	kubeapiserver "github.com/gardener/gardener/pkg/component/kubernetes/apiserver"
+	"github.com/gardener/gardener/pkg/component/state"
 	"github.com/gardener/gardener/pkg/controllerutils"
 	"github.com/gardener/gardener/pkg/utils/flow"
 	gardenerutils "github.com/gardener/gardener/pkg/utils/gardener"
-	"github.com/gardener/gardener/pkg/utils/gardener/shootstate"
 	"github.com/gardener/gardener/pkg/utils/gardener/tokenrequest"
 	kubernetesutils "github.com/gardener/gardener/pkg/utils/kubernetes"
 	secretsutils "github.com/gardener/gardener/pkg/utils/secrets"
@@ -42,7 +42,7 @@ func (b *Botanist) InitializeSecretsManagement(ctx context.Context) error {
 	// explicitly only done in case of restoration to prevent split-brain situations as described in
 	// https://github.com/gardener/gardener/issues/5377.
 	if b.Shoot.IsRestorePhase() {
-		if err := b.restoreSecretsFromShootState(ctx); err != nil {
+		if err := state.RestoreSecrets(ctx, b.SeedClientSet.Client(), b.Shoot.GetShootState(), b.Shoot.ControlPlaneNamespace); err != nil {
 			return err
 		}
 	} else if b.Seed != nil && v1beta1helper.GetLiveMigrationRole(b.Shoot.GetInfo(), b.Seed.GetInfo().Name) ==
@@ -145,7 +145,7 @@ func (b *Botanist) restoreSecretsFromGardenerResourceData(ctx context.Context, g
 }
 
 func restoreSecretFromPersistedData(ctx context.Context, seedClient client.Client, objectMeta metav1.ObjectMeta, rawData []byte) error {
-	var secretInfo shootstate.SecretState
+	var secretInfo state.SecretState
 	if err := json.Unmarshal(rawData, &secretInfo); err != nil {
 		return fmt.Errorf("failed to restore secret %q from PersistedData: %w", objectMeta.Name, err)
 	}

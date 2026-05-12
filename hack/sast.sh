@@ -6,6 +6,8 @@
 
 set -e
 
+source $REPO_ROOT/hack/tools/mod/aliases.sh
+
 report_dir="$(git rev-parse --show-toplevel)"
 report_fname='gosec-report.sarif'
 

@@ -27,10 +27,6 @@ CONTROLLER_GEN             := $(TOOLS_BIN_DIR)/controller-gen
 EXTENSION_GEN              := $(TOOLS_BIN_DIR)/extension-generator
 CRD_REF_DOCS               := $(TOOLS_BIN_DIR)/crd-ref-docs
 GINKGO                     := $(TOOLS_BIN_DIR)/ginkgo
-GOIMPORTS                  := $(TOOLS_BIN_DIR)/goimports
-GOIMPORTSREVISER           := $(TOOLS_BIN_DIR)/goimports-reviser
-GOLANGCI_LINT              := $(TOOLS_BIN_DIR)/golangci-lint
-GOSEC                      := $(TOOLS_BIN_DIR)/gosec
 GO_ADD_LICENSE             := $(TOOLS_BIN_DIR)/addlicense
 GO_TO_PROTOBUF             := $(TOOLS_BIN_DIR)/go-to-protobuf
 HELM                       := $(TOOLS_BIN_DIR)/helm
@@ -51,6 +47,10 @@ SKAFFOLD                   := $(TOOLS_BIN_DIR)/skaffold
 YQ                         := $(TOOLS_BIN_DIR)/yq
 TYPOS                      := $(TOOLS_BIN_DIR)/typos
 GOBUILDCACHE               := $(TOOLS_BIN_DIR)/gobuildcache
+
+# Invoke tools that live in hack/tools/mod/go.mod via go tool -modfile.
+TOOLS_MOD_FILE             := $(REPO_ROOT)/hack/tools/mod/go.mod
+GO_TOOL                    := go tool -modfile $(TOOLS_MOD_FILE)
 
 # default tool versions
 # renovate: datasource=github-releases depName=golangci/golangci-lint
@@ -85,7 +85,6 @@ GOBUILDCACHE_VERSION ?= 83bfeb837b93a786ff37b33d0be108bcc74b089f
 CONTROLLER_GEN_VERSION ?= $(call version_gomod,sigs.k8s.io/controller-tools)
 GINKGO_VERSION ?= $(call version_gomod,github.com/onsi/ginkgo/v2)
 CRD_REF_DOCS_VERSION ?= $(call version_gomod,github.com/elastic/crd-ref-docs)
-GOIMPORTS_VERSION ?= $(call version_gomod,golang.org/x/tools)
 CODE_GENERATOR_VERSION ?= $(call version_gomod,k8s.io/code-generator)
 MOCKGEN_VERSION ?= $(call version_gomod,go.uber.org/mock)
 OPENAPI_GEN_VERSION ?= $(call version_gomod,k8s.io/kube-openapi)
@@ -136,7 +135,7 @@ ifeq ($(shell if [ -d $(TOOLS_BIN_SOURCE_DIR) ]; then echo "found"; fi),found)
 endif
 
 .PHONY: create-tools-bin
-create-tools-bin: $(CONTROLLER_GEN) $(CRD_REF_DOCS) $(GINKGO) $(GOIMPORTS) $(GOIMPORTSREVISER) $(GOSEC) $(GO_ADD_LICENSE) $(GO_TO_PROTOBUF) $(HELM) $(IMPORT_BOSS) $(KIND) $(KUBECTL) $(MOCKGEN) $(OPENAPI_GEN) $(PROMTOOL) $(PROTOC) $(PROTOC_GEN_GOGO) $(SETUP_ENVTEST) $(SKAFFOLD) $(YQ) $(KUSTOMIZE) $(TYPOS) $(GOBUILDCACHE)
+create-tools-bin: $(CONTROLLER_GEN) $(CRD_REF_DOCS) $(GINKGO) $(GO_ADD_LICENSE) $(GO_TO_PROTOBUF) $(HELM) $(IMPORT_BOSS) $(KIND) $(KUBECTL) $(MOCKGEN) $(OPENAPI_GEN) $(PROMTOOL) $(PROTOC) $(PROTOC_GEN_GOGO) $(SETUP_ENVTEST) $(SKAFFOLD) $(YQ) $(KUSTOMIZE) $(TYPOS) $(GOBUILDCACHE)
 
 #########################################
 # Tools                                 #

@@ -139,9 +139,9 @@ check-plutono-dashboards:
 	@hack/check-plutono-dashboards.sh
 
 .PHONY: check
-check: $(GO_ADD_LICENSE) $(GOIMPORTS) $(GOLANGCI_LINT) $(HELM) $(IMPORT_BOSS) $(LOGCHECK) $(YQ) $(TYPOS) logcheck-symlinks
+check: $(GO_ADD_LICENSE) $(HELM) $(IMPORT_BOSS) $(LOGCHECK) $(YQ) $(TYPOS) logcheck-symlinks
 	@sed ./.golangci.yaml.in -e "s#<<LOGCHECK_PLUGIN_PATH>>#$(TOOLS_BIN_DIR)#g" > ./.golangci.yaml
-	@hack/check.sh --golangci-lint-config=./.golangci.yaml ./charts/... ./cmd/... ./extensions/... ./pkg/... ./plugin/... ./test/...
+	@REPO_ROOT=$(REPO_ROOT) hack/check.sh --golangci-lint-config=./.golangci.yaml ./charts/... ./cmd/... ./extensions/... ./pkg/... ./plugin/... ./test/...
 	@hack/check-imports.sh ./charts/... ./cmd/... ./extensions/... ./pkg/... ./plugin/... ./test/...
 
 	@echo "> Check $(PKG_APIS_DIR)"
@@ -149,9 +149,9 @@ check: $(GO_ADD_LICENSE) $(GOIMPORTS) $(GOLANGCI_LINT) $(HELM) $(IMPORT_BOSS) $(
 	@cd $(PKG_APIS_DIR); ../../hack/check-imports.sh ./...
 
 	@echo "> Check $(LOGCHECK_DIR)"
-	@cd $(LOGCHECK_DIR); $(abspath $(GOLANGCI_LINT)) run -c $(REPO_ROOT)/.golangci.yaml --timeout 10m ./...
+	@cd $(LOGCHECK_DIR); $(GO_TOOL) golangci-lint run -c $(REPO_ROOT)/.golangci.yaml --timeout 10m ./...
 	@cd $(LOGCHECK_DIR); go vet ./...
-	@cd $(LOGCHECK_DIR); $(abspath $(GOIMPORTS)) -l .
+	@cd $(LOGCHECK_DIR); $(GO_TOOL) goimports -l .
 
 	@hack/check-charts.sh ./charts
 	@hack/check-license-header.sh
@@ -164,7 +164,7 @@ check: $(GO_ADD_LICENSE) $(GOIMPORTS) $(GOLANGCI_LINT) $(HELM) $(IMPORT_BOSS) $(
 logcheck-symlinks:
 	@LOGCHECK_DIR=$(LOGCHECK_DIR) ./hack/generate-logcheck-symlinks.sh
 
-tools-for-generate: $(CONTROLLER_GEN) $(EXTENSION_GEN) $(CRD_REF_DOCS) $(GOIMPORTS) $(GO_TO_PROTOBUF) $(HELM) $(MOCKGEN) $(OPENAPI_GEN) $(PROTOC) $(PROTOC_GEN_GOGO) $(YQ)
+tools-for-generate: $(CONTROLLER_GEN) $(EXTENSION_GEN) $(CRD_REF_DOCS) $(GO_TO_PROTOBUF) $(HELM) $(MOCKGEN) $(OPENAPI_GEN) $(PROTOC) $(PROTOC_GEN_GOGO) $(YQ)
 	@go mod download
 
 define GENERATE_HELP_INFO
@@ -205,15 +205,15 @@ endif
 .PHONY: format
 format:
 	@REPO_ROOT=$(REPO_ROOT) MODE=$(MODE) ./hack/format.sh ./charts ./cmd ./extensions ./pkg ./plugin ./test ./hack
-	@REPO_ROOT=$(REPO_ROOT); source ./hack/tools/mod/aliases.sh; cd $(LOGCHECK_DIR); goimports -l -w .
+	@REPO_ROOT=$(REPO_ROOT) bash -c 'source hack/tools/mod/aliases.sh; cd $(LOGCHECK_DIR); goimports -l -w .'
 
 .PHONY: sast
-sast: $(GOSEC)
-	@./hack/sast.sh
+sast:
+	@REPO_ROOT=$(REPO_ROOT) ./hack/sast.sh
 
 .PHONY: sast-report
-sast-report: $(GOSEC)
-	@./hack/sast.sh --gosec-report true
+sast-report:
+	@REPO_ROOT=$(REPO_ROOT) ./hack/sast.sh --gosec-report true
 
 .PHONY: test
 test: $(REPORT_COLLECTOR) $(PROMTOOL) $(HELM) logcheck-symlinks

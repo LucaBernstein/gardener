@@ -6,6 +6,8 @@
 
 set -e
 
+source $REPO_ROOT/hack/tools/mod/aliases.sh
+
 GOLANGCI_LINT_CONFIG_FILE=""
 
 for arg in "$@"; do

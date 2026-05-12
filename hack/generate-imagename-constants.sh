@@ -8,6 +8,8 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
+source $REPO_ROOT/hack/tools/mod/aliases.sh
+
 function camelCase {
   sed -r 's/(.)-+(.)/\1\U\2/g;s/^[a-z]/\U&/' <<< "$1"
 }

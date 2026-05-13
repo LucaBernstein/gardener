@@ -55,12 +55,8 @@ GO_TOOL                    := go tool -modfile $(TOOLS_MOD_FILE)
 # default tool versions
 # renovate: datasource=github-releases depName=golangci/golangci-lint
 GOLANGCI_LINT_VERSION ?= v2.12.2
-# renovate: datasource=github-releases depName=securego/gosec
-GOSEC_VERSION ?= v2.26.1
 # renovate: datasource=github-releases depName=google/addlicense
 GO_ADD_LICENSE_VERSION ?= v1.2.0
-# renovate: datasource=github-releases depName=incu6us/goimports-reviser
-GOIMPORTSREVISER_VERSION ?= v3.12.6
 # renovate: datasource=github-releases depName=helm/helm
 HELM_VERSION ?= v4.1.4
 # renovate: datasource=github-releases depName=kubernetes-sigs/kind
@@ -150,23 +146,6 @@ $(CRD_REF_DOCS): $(call tool_version_file,$(CRD_REF_DOCS),$(CRD_REF_DOCS_VERSION
 $(GINKGO): $(call tool_version_file,$(GINKGO),$(GINKGO_VERSION))
 	$(call go_tool_link,$(GINKGO))
 
-$(GOIMPORTS): $(call tool_version_file,$(GOIMPORTS),$(GOIMPORTS_VERSION))
-	$(call go_tool_link,$(GOIMPORTS))
-
-$(GOIMPORTSREVISER): $(call tool_version_file,$(GOIMPORTSREVISER),$(GOIMPORTSREVISER_VERSION))
-	GOBIN=$(abspath $(TOOLS_BIN_DIR)) go install github.com/incu6us/goimports-reviser/v3@$(GOIMPORTSREVISER_VERSION)
-
-$(GOLANGCI_LINT): $(call tool_version_file,$(GOLANGCI_LINT),$(GOLANGCI_LINT_VERSION))
-	@# CGO_ENABLED has to be set to 1 in order for golangci-lint to be able to load plugins
-	@# see https://github.com/golangci/golangci-lint/issues/1276
-	@# We don't specify the GOTOOLCHAIN here, as we want to use the main module's go version to build golangci-lint.
-	@# Note, that the main module might not be the gardener/gardener module, if this Makefile is used in another
-	@# project, e.g., an extension.
-	GOBIN=$(abspath $(TOOLS_BIN_DIR)) CGO_ENABLED=1 go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
-
-$(GOSEC): $(call tool_version_file,$(GOSEC),$(GOSEC_VERSION))
-	@GOSEC_VERSION=$(GOSEC_VERSION) bash $(TOOLS_PKG_PATH)/install-gosec.sh
-
 $(GO_ADD_LICENSE):  $(call tool_version_file,$(GO_ADD_LICENSE),$(GO_ADD_LICENSE_VERSION))
 	GOBIN=$(abspath $(TOOLS_BIN_DIR)) go install github.com/google/addlicense@$(GO_ADD_LICENSE_VERSION)
 
@@ -198,12 +177,14 @@ $(KUSTOMIZE): $(call tool_version_file,$(KUSTOMIZE),$(KUSTOMIZE_VERSION))
 
 # Explicitly specify the toolchain version to ensure logcheck is compiled with the same go version as golangci-lint,
 # i.e., the go toolchain version of the main module (required for loading golangci-lint plugins).
+GOLANGCI_LINT_BIN = $(shell $(GO_TOOL) -n golangci-lint)
+
 ifeq ($(IS_GARDENER),true)
-$(LOGCHECK): $(TOOLS_PKG_PATH)/logcheck/go.* $(shell find $(TOOLS_PKG_PATH)/logcheck -type f -name '*.go') $(GOLANGCI_LINT)
-	cd $(TOOLS_PKG_PATH)/logcheck; GOTOOLCHAIN=$(shell go version -m -json $(GOLANGCI_LINT) | jq -r .GoVersion) CGO_ENABLED=1 go build -o $(abspath $(LOGCHECK)) -buildmode=plugin ./plugin
+$(LOGCHECK): $(TOOLS_PKG_PATH)/logcheck/go.* $(shell find $(TOOLS_PKG_PATH)/logcheck -type f -name '*.go')
+	cd $(TOOLS_PKG_PATH)/logcheck; GOTOOLCHAIN=$(shell go version -m -json $(GOLANGCI_LINT_BIN) | jq -r .GoVersion) CGO_ENABLED=1 go build -o $(abspath $(LOGCHECK)) -buildmode=plugin ./plugin
 else
-$(LOGCHECK): go.mod $(GOLANGCI_LINT)
-	GOTOOLCHAIN=$(shell go version -m -json $(GOLANGCI_LINT) | jq -r .GoVersion) CGO_ENABLED=1 go build -o $(LOGCHECK) -buildmode=plugin github.com/gardener/gardener/hack/tools/logcheck/plugin
+$(LOGCHECK): go.mod
+	GOTOOLCHAIN=$(shell go version -m -json $(GOLANGCI_LINT_BIN) | jq -r .GoVersion) CGO_ENABLED=1 go build -o $(LOGCHECK) -buildmode=plugin github.com/gardener/gardener/hack/tools/logcheck/plugin
 endif
 
 $(MOCKGEN): $(call tool_version_file,$(MOCKGEN),$(MOCKGEN_VERSION))

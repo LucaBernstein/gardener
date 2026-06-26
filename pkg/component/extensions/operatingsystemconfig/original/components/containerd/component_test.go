@@ -48,10 +48,11 @@ WantedBy=multi-user.target`),
 				Command: new(extensionsv1alpha1.CommandStart),
 				Enable:  new(true),
 				Content: new(`[Unit]
-Description=Log Rotation at each 10 minutes
+Description=Log Rotation at each day
 [Timer]
-OnCalendar=*:0/10
+OnCalendar=daily
 AccuracySec=1min
+RandomizedDelaySec=12h
 Persistent=true
 [Install]
 WantedBy=multi-user.target`),

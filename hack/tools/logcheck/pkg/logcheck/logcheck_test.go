@@ -9,7 +9,7 @@ import (
 
 	"golang.org/x/tools/go/analysis/analysistest"
 
-	. "github.com/gardener/gardener/hack/tools/tool/logcheck/pkg/logcheck"
+	"github.com/gardener/gardener/hack/tools/logcheck/pkg/logcheck"
 )
 
 func TestLogcheck(t *testing.T) {
@@ -18,7 +18,7 @@ func TestLogcheck(t *testing.T) {
 		"no-logr",
 	} {
 		t.Run(test, func(t *testing.T) {
-			analysistest.Run(t, analysistest.TestData(), Analyzer, test)
+			analysistest.Run(t, analysistest.TestData(), logcheck.Analyzer, test)
 		})
 	}
 }

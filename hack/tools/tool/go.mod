@@ -4,6 +4,7 @@ go 1.26.0
 
 tool (
 	github.com/elastic/crd-ref-docs
+	github.com/gardener/gardener/hack/tools/logcheck
 	github.com/golangci/golangci-lint/v2/cmd/golangci-lint
 	github.com/google/addlicense
 	github.com/incu6us/goimports-reviser/v3
@@ -145,6 +146,7 @@ require (
 	github.com/fsnotify/fsnotify v1.10.1 // indirect
 	github.com/fxamacker/cbor/v2 v2.9.2 // indirect
 	github.com/fzipp/gocyclo v0.6.0 // indirect
+	github.com/gardener/gardener/hack/tools/logcheck v0.0.0-20260709061253-aef7310fb913 // indirect
 	github.com/ghostiam/protogetter v0.3.20 // indirect
 	github.com/go-critic/go-critic v0.14.3 // indirect
 	github.com/go-git/gcfg v1.5.1-0.20230307220236-3a3c6141e376 // indirect

@@ -1,4 +1,4 @@
-module github.com/gardener/gardener/hack/tools/tool
+module github.com/gardener/gardener/hack/tools
 
 // Version must be kept in sync with Go version of https://github.com/golangci/golangci-lint.
 go 1.26.0
@@ -18,6 +18,7 @@ tool (
 	k8s.io/code-generator/cmd/go-to-protobuf
 	k8s.io/code-generator/cmd/go-to-protobuf/protoc-gen-gogo
 	k8s.io/kube-openapi/cmd/openapi-gen
+	sigs.k8s.io/controller-runtime
 	sigs.k8s.io/controller-tools/cmd/controller-gen
 )
 
@@ -36,8 +37,6 @@ require (
 	golang.org/x/mod v0.37.0 // indirect
 	golang.org/x/sync v0.22.0 // indirect
 )
-
-require sigs.k8s.io/controller-runtime v0.24.1
 
 require (
 	4d63.com/gocheckcompilerdirectives v1.3.0 // indirect
@@ -416,6 +415,7 @@ require (
 	k8s.io/utils v0.0.0-20260707023825-cf1189d6abe3 // indirect
 	mvdan.cc/gofumpt v0.9.2 // indirect
 	mvdan.cc/unparam v0.0.0-20251027182757-5beb8c8f8f15 // indirect
+	sigs.k8s.io/controller-runtime v0.24.1 // indirect
 	sigs.k8s.io/controller-tools v0.21.0 // indirect
 	sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730 // indirect
 	sigs.k8s.io/randfill v1.0.0 // indirect

@@ -13,12 +13,12 @@ IS_GARDENER := $(shell go list -f '{{.Main}}' -m github.com/gardener/gardener)
 
 ifeq ($(IS_GARDENER),true)
 GARDENER_HACK_DIR          := ./hack
-GARDENER_LOGCHECK_DIR      := ./hack/tools/tool/logcheck
+GARDENER_LOGCHECK_DIR      := ./hack/tools/logcheck
 else
 # dependency on github.com/gardener/gardener is optional.
 # If other repos don't use it and the project doesn't depend on the package, silence the error to minimize confusion.
 GARDENER_HACK_DIR          := $(shell go list -m -f "{{.Dir}}" github.com/gardener/gardener 2>/dev/null)/hack
-GARDENER_TOOL_DIR          := $(shell go list -m -f "{{.Dir}}" github.com/gardener/gardener/hack/tools/tool 2>/dev/null)
+GARDENER_TOOL_DIR          := $(shell go list -m -f "{{.Dir}}" github.com/gardener/gardener/hack/tools 2>/dev/null)
 GARDENER_LOGCHECK_DIR      := $(GARDENER_TOOL_DIR)/logcheck
 MODFILE_TOOL_MOD           := -modfile $(GARDENER_TOOL_DIR)/go.mod
 SET_GOWORK                 := GOWORK=off
@@ -221,7 +221,7 @@ $(LOGCHECK): $(call tool_version_file,$(LOGCHECK),$(LOGCHECK_VERSION)) $(GOLANGC
 	cd $(GARDENER_LOGCHECK_DIR); GOTOOLCHAIN=$(shell go version -m -json $(GOLANGCI_LINT) | jq -r .GoVersion) CGO_ENABLED=1 go build -o $(abspath $(LOGCHECK)) -buildmode=plugin ./plugin
 else
 $(LOGCHECK): $(call tool_version_file,$(LOGCHECK),$(LOGCHECK_VERSION)) $(GOLANGCI_LINT)
-	@[ -n "$(GARDENER_LOGCHECK_DIR)" ] || { echo "GARDENER_LOGCHECK_DIR is not set, cannot build logcheck plugin. Consider adding github.com/gardener/gardener/hack/tools/tool/logcheck as dependency if errors occur." >&2; exit 1; }
+	@[ -n "$(GARDENER_LOGCHECK_DIR)" ] || { echo "GARDENER_LOGCHECK_DIR is not set, cannot build logcheck plugin. Consider adding github.com/gardener/gardener/hack/tools/logcheck as dependency if errors occur." >&2; exit 1; }
 	GOTOOLCHAIN=$(shell go version -m -json $(GOLANGCI_LINT) | jq -r .GoVersion) CGO_ENABLED=1 go build -o $(LOGCHECK) -buildmode=plugin $(GARDENER_LOGCHECK_DIR)/plugin
 endif
 

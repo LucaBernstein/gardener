@@ -25,6 +25,8 @@ func ComputeOperationType(meta metav1.ObjectMeta, lastOperation *gardencorev1bet
 		return gardencorev1beta1.LastOperationTypeDelete
 	case meta.Annotations[v1beta1constants.GardenerOperation] == v1beta1constants.GardenerOperationRestore:
 		return gardencorev1beta1.LastOperationTypeRestore
+	case meta.Annotations[v1beta1constants.GardenerOperation] == v1beta1constants.GardenerOperationForceRestore:
+		return gardencorev1beta1.LastOperationTypeRestore
 	case lastOperation == nil:
 		return gardencorev1beta1.LastOperationTypeCreate
 	case lastOperation.Type == gardencorev1beta1.LastOperationTypeCreate && lastOperation.State != gardencorev1beta1.LastOperationStateSucceeded:
@@ -95,10 +97,11 @@ func ShootHasOperationType(lastOperation *gardencorev1beta1.LastOperation, lastO
 	return lastOperation != nil && lastOperation.Type == lastOperationType
 }
 
-// HasOperationAnnotation returns true if the operation annotation is present and its value is "reconcile", "restore, or "migrate".
+// HasOperationAnnotation returns true if the operation annotation is present and its value is "reconcile", "restore", "force-restore", or "migrate".
 func HasOperationAnnotation(annotations map[string]string) bool {
 	return annotations[v1beta1constants.GardenerOperation] == v1beta1constants.GardenerOperationReconcile ||
 		annotations[v1beta1constants.GardenerOperation] == v1beta1constants.GardenerOperationRestore ||
+		annotations[v1beta1constants.GardenerOperation] == v1beta1constants.GardenerOperationForceRestore ||
 		annotations[v1beta1constants.GardenerOperation] == v1beta1constants.GardenerOperationMigrate
 }
 

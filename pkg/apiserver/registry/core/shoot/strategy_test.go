@@ -650,6 +650,13 @@ var _ = Describe("Strategy", func() {
 					[]string{v1beta1constants.ShootOperationForceInPlaceUpdate},
 				),
 
+				Entry("force-restore",
+					v1beta1constants.GardenerOperationForceRestore,
+					nil,
+					true,
+					[]string{v1beta1constants.GardenerOperationForceRestore},
+				),
+
 				Entry("reconcile and rotate-etcd-encryption-key",
 					fmt.Sprintf("%s;%s", v1beta1constants.GardenerOperationReconcile, v1beta1constants.OperationRotateETCDEncryptionKey),
 					nil,

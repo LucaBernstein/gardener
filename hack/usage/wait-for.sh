@@ -23,6 +23,15 @@ shift 2
 CONDITIONS=("$@")
 NAMESPACE=${NAMESPACE:-}
 SKIP_LAST_OPERATION_CHECK=${SKIP_LAST_OPERATION_CHECK:-false}
+# SKIP_WAIT=true exits immediately with success. Use when the caller handles its own readiness check
+# (e.g. the force-restore e2e deploys the gardenlet behind an emergency-stop annotation and waits
+# for the seed in a separate step, after the force-restore annotation is set).
+SKIP_WAIT=${SKIP_WAIT:-false}
+
+if [ "$SKIP_WAIT" = "true" ]; then
+  echo "ℹ️  SKIP_WAIT=true — skipping readiness check for ${RESOURCE_TYPE}/${OBJECT_NAME}."
+  exit 0
+fi
 
 # The number of retries before failing
 TIMEOUT=${TIMEOUT:-600}

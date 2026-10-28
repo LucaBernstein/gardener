@@ -5919,7 +5919,21 @@ var _ = Describe("Shoot Validation Tests", func() {
 				Entry("maintenance.gardener.cloud/operation=rotate-credentials-start-without-workers-rollout", "maintenance.gardener.cloud/operation", "rotate-credentials-start-without-workers-rollout"),
 				Entry("maintenance.gardener.cloud/operation=rotate-ca-start-without-workers-rollout", "maintenance.gardener.cloud/operation", "rotate-ca-start-without-workers-rollout"),
 				Entry("maintenance.gardener.cloud/operation=rotate-serviceaccount-key-start-without-workers-rollout", "maintenance.gardener.cloud/operation", "rotate-serviceaccount-key-start-without-workers-rollout"),
+				Entry("gardener.cloud/operation=force-restore", "gardener.cloud/operation", "force-restore"),
 			)
+
+			It("should prevent specifying force-restore for self-hosted shoots", func() {
+				shoot.Namespace = "garden"
+				shoot.Spec.Provider.Workers[0].ControlPlane = &core.WorkerControlPlane{}
+				shoot.Spec.Provider.Workers[0].UpdateStrategy = new(core.AutoInPlaceUpdate)
+				metav1.SetMetaDataAnnotation(&shoot.ObjectMeta, "gardener.cloud/operation", "force-restore")
+
+				Expect(ValidateShoot(shoot)).To(ContainElement(PointTo(MatchFields(IgnoreExtras, Fields{
+					"Type":   Equal(field.ErrorTypeForbidden),
+					"Field":  Equal("metadata.annotations[gardener.cloud/operation]"),
+					"Detail": ContainSubstring("force-restore is not supported for self-hosted shoot clusters"),
+				}))))
+			})
 
 			DescribeTable("validate specifying valid rollout worker operation annotations",
 				func(key, value string) {

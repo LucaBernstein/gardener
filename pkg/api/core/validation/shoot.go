@@ -3475,6 +3475,11 @@ func validateShootOperationContext(operation string, shoot *core.Shoot, fldPath 
 			allErrs = append(allErrs, field.Forbidden(fldPath, "cannot complete rotation of all credentials if .status.credentials.rotation.etcdEncryptionKey.phase is not 'Prepared'"))
 		}
 
+	case v1beta1constants.GardenerOperationForceRestore:
+		if helper.IsShootSelfHosted(shoot.Spec.Provider.Workers) {
+			allErrs = append(allErrs, field.Forbidden(fldPath, "force-restore is not supported for self-hosted shoot clusters"))
+		}
+
 	case v1beta1constants.OperationRotateCAStart, v1beta1constants.OperationRotateCAStartWithoutWorkersRollout:
 		if !isShootReadyForRotationStart(shoot.Status.LastOperation) {
 			allErrs = append(allErrs, field.Forbidden(fldPath, "cannot start CA rotation if shoot was not yet created successfully or is not ready for reconciliation"))

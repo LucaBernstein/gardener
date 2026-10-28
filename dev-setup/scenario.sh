@@ -47,6 +47,14 @@ function detect_scenario() {
     export SCENARIO="${SCENARIO}2"
   fi
 
+  # GARDENLET_PROFILE_SUFFIX lets an e2e scenario (e.g. force-restore) select a dedicated gardenlet
+  # overlay without a distinct cluster topology. It is only honored for the single-node2 scenario,
+  # which is the (auto-detected) two-seed setup used by the control-plane-migration and force-restore
+  # e2e tests. Keeps the force-restore-specific gardenlet config out of the shared single-node2 overlay.
+  if [[ -n "${GARDENLET_PROFILE_SUFFIX:-}" && "$SCENARIO" == "single-node2" ]]; then
+    export SCENARIO="${SCENARIO}-${GARDENLET_PROFILE_SUFFIX}"
+  fi
+
   if [[ "$IPFAMILY" == "ipv6" ]]; then
     export SCENARIO="${SCENARIO}-ipv6"
   elif [[ "$IPFAMILY" == "dual" ]]; then
@@ -71,6 +79,9 @@ function skaffold_profile() {
       ;;
     single-node2)
       export SKAFFOLD_PROFILE="single-node2"
+      ;;
+    single-node2-force-restore)
+      export SKAFFOLD_PROFILE="single-node2-force-restore"
       ;;
     multi-node)
       export SKAFFOLD_PROFILE="multi-node"

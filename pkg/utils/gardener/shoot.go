@@ -841,6 +841,8 @@ func IsShootNamespace(ctx context.Context, reader client.Reader, namespaceName s
 // GetShootConditionTypes returns all known shoot condition types.
 func GetShootConditionTypes(workerless bool) []gardencorev1beta1.ConditionType {
 	shootConditionTypes := []gardencorev1beta1.ConditionType{
+		gardencorev1beta1.ConditionReconciling,
+		gardencorev1beta1.ConditionStalled,
 		gardencorev1beta1.ShootAPIServerAvailable,
 		gardencorev1beta1.ShootControlPlaneHealthy,
 		gardencorev1beta1.ShootObservabilityComponentsHealthy,

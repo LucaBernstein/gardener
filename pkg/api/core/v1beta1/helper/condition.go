@@ -196,3 +196,26 @@ func NewConditionOrError(clock clock.Clock, oldCondition gardencorev1beta1.Condi
 	}
 	return *newCondition
 }
+
+// MergeConditionsKStatus sets kstatus-compatible Reconciling and Stalled status conditions.
+func MergeConditionsKStatus(conditions []gardencorev1beta1.Condition, isReconciling bool, stalledMessage, stalledReason string) []gardencorev1beta1.Condition {
+	statusReconciling := gardencorev1beta1.ConditionFalse
+	if isReconciling {
+		statusReconciling = gardencorev1beta1.ConditionTrue
+	}
+	conditionReconciling := gardencorev1beta1.Condition{
+		Type:   gardencorev1beta1.ConditionReconciling,
+		Status: statusReconciling,
+	}
+	statusStalled := gardencorev1beta1.ConditionFalse
+	if stalledMessage != "" || stalledReason != "" {
+		statusStalled = gardencorev1beta1.ConditionTrue
+	}
+	conditionStalled := gardencorev1beta1.Condition{
+		Type:    gardencorev1beta1.ConditionStalled,
+		Status:  statusStalled,
+		Message: stalledMessage,
+		Reason:  stalledReason,
+	}
+	return MergeConditions(conditions, conditionReconciling, conditionStalled)
+}

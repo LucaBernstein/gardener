@@ -212,6 +212,8 @@ func (g GardenConditions) ConvertToSlice() []gardencorev1beta1.Condition {
 // ConditionTypes returns all garden condition types.
 func (g GardenConditions) ConditionTypes() []gardencorev1beta1.ConditionType {
 	return []gardencorev1beta1.ConditionType{
+		gardencorev1beta1.ConditionReconciling,
+		gardencorev1beta1.ConditionStalled,
 		g.virtualGardenAPIServerAvailable.Type,
 		g.runtimeComponentsHealthy.Type,
 		g.virtualComponentsHealthy.Type,

@@ -63,6 +63,8 @@ spec:
 {{ toYaml .Values.podLabels | indent 8 }}
         {{- end }}
     spec:
+      readinessGates:
+      - conditionType: operator.gardener.cloud/bootstrapped
       priorityClassName: gardener-garden-system-critical
       {{- if not .Values.config.runtimeClientConnection.kubeconfig }}
       serviceAccountName: {{ required ".Values.serviceAccountName is required" .Values.serviceAccountName }}
@@ -78,8 +80,15 @@ spec:
         imagePullPolicy: {{ .Values.image.pullPolicy }}
         args:
         - --config=/etc/gardener-operator/config/config.yaml
-        {{- if or .Values.env .Values.imageVectorOverwrite .Values.componentImageVectorOverwrites .Values.chartsImageVectorOverwrite }}
         env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
         {{- if .Values.imageVectorOverwrite }}
         - name: IMAGEVECTOR_OVERWRITE
           value: /imagevector_overwrite/images_overwrite.yaml
@@ -96,7 +105,6 @@ spec:
         {{- if not (empty $value) }}
         - name: {{ index $value "name" | quote }}
           value: {{ index $value "value" | quote }}
-        {{- end }}
         {{- end }}
         {{- end }}
         {{- if .Values.config.server.healthProbes.enable }}

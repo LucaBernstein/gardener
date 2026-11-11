@@ -16,6 +16,7 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/spf13/cobra"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/component-base/version/verflag"
 	"k8s.io/utils/clock"
 	"k8s.io/utils/ptr"
@@ -148,6 +149,16 @@ func run(ctx context.Context, cancel context.CancelFunc, log logr.Logger, cfg *o
 	}
 	if err := bootstrappers.RestoreGardenState(ctx, mgr.GetLogger(), runtimeClient, v1beta1constants.GardenNamespace); err != nil {
 		return fmt.Errorf("failed restoring garden-state: %w", err)
+	}
+
+	podName, podNamespace := os.Getenv("POD_NAME"), os.Getenv("POD_NAMESPACE")
+	if podName != "" && podNamespace != "" {
+		podKey := types.NamespacedName{Namespace: podNamespace, Name: podName}
+		if err := bootstrappers.SetPodBootstrappedCondition(ctx, runtimeClient, podKey); err != nil {
+			return fmt.Errorf("failed setting bootstrapped condition on pod %s: %w", podKey, err)
+		}
+	} else {
+		log.Info("Pod identity is not available, skipping bootstrapped pod condition")
 	}
 
 	log.Info("Adding certificate management to manager")

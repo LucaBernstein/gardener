@@ -38,57 +38,36 @@ func RestoreSecrets(ctx context.Context, c client.Client, state component.State,
 		}
 
 		fns = append(fns, func(ctx context.Context) error {
-			objectMeta := metav1.ObjectMeta{
+			return RestoreSecretFromPersistedData(ctx, c, metav1.ObjectMeta{
 				Name:      entry.Name,
 				Namespace: namespace,
 				Labels:    entry.Labels,
-			}
-
-			return restoreSecretFromPersistedData(ctx, c, objectMeta, entry.Data.Raw)
+			}, entry.Data.Raw)
 		})
 	}
 
 	return flow.Parallel(fns...)(ctx)
 }
 
-// restoreSecretFromPersistedData restores a Kubernetes Secret from persisted GardenerResourceData.
+// RestoreSecretFromPersistedData restores a Kubernetes Secret from persisted GardenerResourceData.
 // It handles both formats (with Immutable and Type fields) and (plain map[string][]byte).
-func restoreSecretFromPersistedData(ctx context.Context, seedClient client.Client, objectMeta metav1.ObjectMeta, rawData []byte) error {
-	var newSecretInfo SecretState
-
-	var (
-		secretData map[string][]byte
-		immutable  *bool
-		secretType = corev1.SecretTypeOpaque
-	)
-
-	if err := json.Unmarshal(rawData, &newSecretInfo); err != nil || newSecretInfo.Data == nil {
-		// TODO(tobschli): Remove this fallback after v1.143 has been released, as ShootStates will be reconciled and use the new format.
-		// plain map[string][]byte
-		if err := json.Unmarshal(rawData, &secretData); err != nil {
-			return fmt.Errorf("failed unmarshalling secret data for secret %s: neither new nor old format matched: %w", objectMeta.Name, err)
-		}
-
-		if objectMeta.Labels[secretsmanager.LabelKeyManagedBy] == secretsmanager.LabelValueSecretsManager {
-			secret := secretsmanager.Secret(objectMeta, secretData)
-			return client.IgnoreAlreadyExists(seedClient.Create(ctx, secret))
-		}
-	} else {
-		secretData = newSecretInfo.Data
-		immutable = newSecretInfo.Immutable
-		if newSecretInfo.Type != "" {
-			secretType = newSecretInfo.Type
-		}
+func RestoreSecretFromPersistedData(ctx context.Context, seedClient client.Client, objectMeta metav1.ObjectMeta, rawData []byte) error {
+	var secretInfo SecretState
+	if err := json.Unmarshal(rawData, &secretInfo); err != nil {
+		return fmt.Errorf("failed to restore secret %q from PersistedData: %w", objectMeta.Name, err)
 	}
 
-	secret := &corev1.Secret{
+	secretType := corev1.SecretTypeOpaque
+	if secretInfo.Type != "" {
+		secretType = secretInfo.Type
+	}
+
+	return client.IgnoreAlreadyExists(seedClient.Create(ctx, &corev1.Secret{
 		ObjectMeta: objectMeta,
 		Type:       secretType,
-		Data:       secretData,
-		Immutable:  immutable,
-	}
-
-	return client.IgnoreAlreadyExists(seedClient.Create(ctx, secret))
+		Data:       secretInfo.Data,
+		Immutable:  secretInfo.Immutable,
+	}))
 }
 
 // SecretState stores the data, immutability and type of a secret to be persisted in the State.

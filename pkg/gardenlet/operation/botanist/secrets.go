@@ -6,7 +6,6 @@ package botanist
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"regexp"
 	"time"
@@ -133,7 +132,7 @@ func (b *Botanist) restoreSecretsFromGardenerResourceData(ctx context.Context, g
 		}
 
 		fns = append(fns, func(ctx context.Context) error {
-			return restoreSecretFromPersistedData(ctx, b.SeedClientSet.Client(), metav1.ObjectMeta{
+			return state.RestoreSecretFromPersistedData(ctx, b.SeedClientSet.Client(), metav1.ObjectMeta{
 				Name:      entry.Name,
 				Namespace: b.Shoot.ControlPlaneNamespace,
 				Labels:    entry.Labels,
@@ -142,25 +141,6 @@ func (b *Botanist) restoreSecretsFromGardenerResourceData(ctx context.Context, g
 	}
 
 	return flow.Parallel(fns...)(ctx)
-}
-
-func restoreSecretFromPersistedData(ctx context.Context, seedClient client.Client, objectMeta metav1.ObjectMeta, rawData []byte) error {
-	var secretInfo state.SecretState
-	if err := json.Unmarshal(rawData, &secretInfo); err != nil {
-		return fmt.Errorf("failed to restore secret %q from PersistedData: %w", objectMeta.Name, err)
-	}
-
-	secretType := corev1.SecretTypeOpaque
-	if secretInfo.Type != "" {
-		secretType = secretInfo.Type
-	}
-
-	return client.IgnoreAlreadyExists(seedClient.Create(ctx, &corev1.Secret{
-		ObjectMeta: objectMeta,
-		Type:       secretType,
-		Data:       secretInfo.Data,
-		Immutable:  secretInfo.Immutable,
-	}))
 }
 
 func caCertConfigurations(isWorkerless, isSelfHosted bool) []secretsutils.ConfigInterface {

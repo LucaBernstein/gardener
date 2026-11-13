@@ -12,7 +12,7 @@ import (
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// GardenState describes a persisted state of the garden.
+// GardenState describes a persisted state of the garden. It is stored as Brotli-compressed JSON in a Secret.
 type GardenState struct {
 	metav1.TypeMeta `json:",inline"`
 	// Standard object metadata.

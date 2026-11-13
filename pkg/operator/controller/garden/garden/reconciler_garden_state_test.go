@@ -53,7 +53,7 @@ func TestSyncGardenState(t *testing.T) {
 			}
 			g.Expect(err).NotTo(HaveOccurred())
 			g.Expect(secret.Data).To(HaveLen(1))
-			g.Expect(secret.Data).To(HaveKey("state"))
+			g.Expect(secret.Data).To(HaveKey("state.br"))
 			state, err := bootstrappers.DecodeGardenStateSecret(secret)
 			g.Expect(err).NotTo(HaveOccurred())
 			g.Expect(state.Garden.Name).To(Equal("garden"))

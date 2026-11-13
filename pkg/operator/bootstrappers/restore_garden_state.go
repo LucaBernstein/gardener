@@ -5,10 +5,13 @@
 package bootstrappers
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 
+	"github.com/andybalholm/brotli"
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -31,8 +34,8 @@ const (
 	// GardenStateSecretName is the name of the garden-state secret.
 	GardenStateSecretName = "garden-state"
 
-	// gardenStateSecretStateKey is the key in the secret data where the garden-state is stored.
-	gardenStateSecretStateKey = "state"
+	// gardenStateSecretCompressedStateKey is the key for Brotli-compressed garden-state.
+	gardenStateSecretCompressedStateKey = "state.br"
 )
 
 // RestoreGardenState checks for a garden-state secret and restores secrets, operator Extension definitions,
@@ -119,12 +122,15 @@ func GetGardenStateSecret(ctx context.Context, c client.Reader, gardenNamespace 
 	return &secretList.Items[0], nil
 }
 
-// DecodeGardenStateSecret decodes the garden-state from the given secret.
-// It expects the secret to have a specific format and returns an error if decoding fails.
+// DecodeGardenStateSecret decodes the Brotli-compressed garden-state from the given secret.
 func DecodeGardenStateSecret(secret *corev1.Secret) (*operatorv1alpha1.GardenState, error) {
-	raw, ok := secret.Data[gardenStateSecretStateKey]
+	compressed, ok := secret.Data[gardenStateSecretCompressedStateKey]
 	if !ok {
-		return nil, fmt.Errorf("garden-state secret is missing 'state' key")
+		return nil, fmt.Errorf("garden-state secret is missing 'state.br' key")
+	}
+	raw, err := io.ReadAll(brotli.NewReader(bytes.NewReader(compressed)))
+	if err != nil {
+		return nil, fmt.Errorf("failed decompressing garden-state data: %w", err)
 	}
 
 	data := &operatorv1alpha1.GardenState{}
@@ -180,7 +186,7 @@ func patchGardenStatus(ctx context.Context, c client.Client, garden *operatorv1a
 	return c.Status().Patch(ctx, garden, patch)
 }
 
-// EncodeGardenStateSecret encodes the garden-state into a Secret. This is called at the end of
+// EncodeGardenStateSecret encodes the garden-state as Brotli-compressed JSON in a Secret. This is called at the end of
 // garden reconciliation to persist the current state.
 func EncodeGardenStateSecret(garden *operatorv1alpha1.Garden, secrets []gardencorev1beta1.GardenerResourceData, operatorExtensions []operatorv1alpha1.Extension, extensions []gardencorev1beta1.ExtensionResourceState, resources []gardencorev1beta1.ResourceData) (*corev1.Secret, error) {
 	stateData := &operatorv1alpha1.GardenState{
@@ -214,6 +220,15 @@ func EncodeGardenStateSecret(garden *operatorv1alpha1.Garden, secrets []gardenco
 		return nil, fmt.Errorf("failed marshalling garden-state data: %w", err)
 	}
 
+	var compressed bytes.Buffer
+	writer := brotli.NewWriter(&compressed)
+	if _, err := writer.Write(raw); err != nil {
+		return nil, fmt.Errorf("failed compressing garden-state data: %w", err)
+	}
+	if err := writer.Close(); err != nil {
+		return nil, fmt.Errorf("failed closing garden-state compression writer: %w", err)
+	}
+
 	return &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      GardenStateSecretName,
@@ -223,7 +238,7 @@ func EncodeGardenStateSecret(garden *operatorv1alpha1.Garden, secrets []gardenco
 			},
 		},
 		Data: map[string][]byte{
-			gardenStateSecretStateKey: raw,
+			gardenStateSecretCompressedStateKey: compressed.Bytes(),
 		},
 	}, nil
 }

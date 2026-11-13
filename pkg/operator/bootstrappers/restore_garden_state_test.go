@@ -6,6 +6,7 @@ package bootstrappers_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/go-logr/logr"
@@ -25,6 +26,7 @@ import (
 	operatorv1alpha1 "github.com/gardener/gardener/pkg/apis/operator/v1alpha1"
 	. "github.com/gardener/gardener/pkg/operator/bootstrappers"
 	operatorclient "github.com/gardener/gardener/pkg/operator/client"
+	"github.com/gardener/gardener/pkg/utils/test"
 )
 
 var _ = Describe("GardenState", func() {
@@ -82,7 +84,8 @@ var _ = Describe("GardenState", func() {
 			Name: extension.Name, Labels: extension.Labels, Annotations: extension.Annotations, Spec: extension.Spec,
 		}}))
 		Expect(state.Extensions).To(Equal(extensionStates))
-		raw := secret.Data["state"]
+		raw, err := test.BrotliDecompression(secret.Data["state.br"])
+		Expect(err).NotTo(HaveOccurred())
 		Expect(string(raw)).NotTo(ContainSubstring("old-uid"))
 		Expect(string(raw)).NotTo(ContainSubstring("observedGeneration"))
 		Expect(string(raw)).NotTo(ContainSubstring("finalizers"))
@@ -153,7 +156,8 @@ var _ = Describe("GardenState", func() {
 	It("restores GardenStates without operator definitions", func() {
 		secret, err := EncodeGardenStateSecret(garden, nil, nil, nil, nil)
 		Expect(err).NotTo(HaveOccurred())
-		raw := secret.Data["state"]
+		raw, err := test.BrotliDecompression(secret.Data["state.br"])
+		Expect(err).NotTo(HaveOccurred())
 		Expect(string(raw)).NotTo(ContainSubstring("operatorExtensions"))
 		secret.ResourceVersion = stateSecret.ResourceVersion
 		Expect(fakeClient.Update(ctx, secret)).To(Succeed())
@@ -168,4 +172,40 @@ var _ = Describe("GardenState", func() {
 		Expect(extensions.Items).To(BeEmpty())
 	})
 
+	It("stores a smaller Brotli-compressed payload and decodes it losslessly", func() {
+		Expect(stateSecret.Data).To(HaveLen(1))
+		Expect(stateSecret.Data).To(HaveKey("state.br"))
+		state, err := DecodeGardenStateSecret(stateSecret)
+		Expect(err).NotTo(HaveOccurred())
+		raw, err := json.Marshal(state)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(len(stateSecret.Data["state.br"])).To(BeNumerically("<", len(raw)))
+		decompressed, err := test.BrotliDecompression(stateSecret.Data["state.br"])
+		Expect(err).NotTo(HaveOccurred())
+		Expect(decompressed).To(Equal(raw))
+	})
+
+	It("rejects uncompressed state", func() {
+		_, err := DecodeGardenStateSecret(&corev1.Secret{Data: map[string][]byte{"state": []byte(`{"garden":{"name":"garden"}}`)}})
+		Expect(err).To(MatchError(ContainSubstring("missing 'state.br' key")))
+	})
+
+	It("reports invalid Brotli data", func() {
+		stateSecret.Data["state.br"] = []byte("invalid-brotli-data")
+		_, err := DecodeGardenStateSecret(stateSecret)
+		Expect(err).To(MatchError(ContainSubstring("failed decompressing garden-state data")))
+	})
+
+	It("reports invalid JSON after decompression", func() {
+		raw, err := test.BrotliCompression([]byte("invalid-json"))
+		Expect(err).NotTo(HaveOccurred())
+		stateSecret.Data["state.br"] = raw
+		_, err = DecodeGardenStateSecret(stateSecret)
+		Expect(err).To(MatchError(ContainSubstring("failed unmarshalling garden-state data")))
+	})
+
+	It("reports missing state data", func() {
+		_, err := DecodeGardenStateSecret(&corev1.Secret{})
+		Expect(err).To(MatchError(ContainSubstring("missing 'state.br' key")))
+	})
 })

@@ -39,7 +39,12 @@ func (r *Reconciler) syncGardenState(ctx context.Context, log logr.Logger, garde
 		return fmt.Errorf("failed computing extensions data and resources: %w", err)
 	}
 
-	stateSecret, err := bootstrappers.EncodeGardenStateSecret(garden, entries, extensions, resources)
+	operatorExtensions := &operatorv1alpha1.ExtensionList{}
+	if err := targetClient.List(ctx, operatorExtensions); err != nil {
+		return fmt.Errorf("failed listing operator Extensions to persist: %w", err)
+	}
+
+	stateSecret, err := bootstrappers.EncodeGardenStateSecret(garden, entries, operatorExtensions.Items, extensions, resources)
 	if err != nil {
 		return fmt.Errorf("failed encoding garden-state secret: %w", err)
 	}

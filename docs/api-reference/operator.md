@@ -1610,7 +1610,7 @@ ExtensionHelm is the configuration for a helm deployment.
 
 
 <p>
-(<em>Appears on:</em><a href="#extension">Extension</a>)
+(<em>Appears on:</em><a href="#extension">Extension</a>, <a href="#gardenstateextension">GardenStateExtension</a>)
 </p>
 
 <p>
@@ -1960,6 +1960,18 @@ GardenerResourceData array
 </tr>
 <tr>
 <td>
+<code>operatorExtensions</code></br>
+<em>
+<a href="#gardenstateextension">GardenStateExtension</a> array
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>OperatorExtensions holds the operator Extension definitions needed to reinstall extension controllers during restore.</p>
+</td>
+</tr>
+<tr>
+<td>
 <code>extensions</code></br>
 <em>
 ExtensionResourceState array
@@ -1980,6 +1992,80 @@ ResourceData array
 <td>
 <em>(Optional)</em>
 <p>Resources holds the data of resources referred to by extension controller states.</p>
+</td>
+</tr>
+
+</tbody>
+</table>
+
+
+<h3 id="gardenstateextension">GardenStateExtension
+</h3>
+
+
+<p>
+(<em>Appears on:</em><a href="#gardenstate">GardenState</a>)
+</p>
+
+<p>
+GardenStateExtension contains an operator Extension definition persisted in a GardenState.
+Like GardenStateGarden, it uses explicit metadata fields to avoid pruning nested ObjectMeta.
+Status is not persisted so that installation and required conditions are recomputed during restore.
+</p>
+
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+
+<tr>
+<td>
+<code>name</code></br>
+<em>
+string
+</em>
+</td>
+<td>
+<p>Name is the name of the Extension resource.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>labels</code></br>
+<em>
+object (keys:string, values:string)
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Labels are the labels of the Extension resource.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>annotations</code></br>
+<em>
+object (keys:string, values:string)
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Annotations are the annotations of the Extension resource.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>spec</code></br>
+<em>
+<a href="#extensionspec">ExtensionSpec</a>
+</em>
+</td>
+<td>
+<p>Spec is the spec of the Extension resource.</p>
 </td>
 </tr>
 
@@ -4304,5 +4390,3 @@ WorkloadIdentityKeyRotation contains information about the workload identity key
 
 </tbody>
 </table>
-
-

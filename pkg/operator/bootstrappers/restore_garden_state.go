@@ -35,8 +35,9 @@ const (
 	gardenStateSecretStateKey = "state"
 )
 
-// RestoreGardenState checks for a garden-state secret and restores the Garden resource from it
-// if no Garden currently exists. This blocks operator startup until restore is complete.
+// RestoreGardenState checks for a garden-state secret and restores secrets, operator Extension definitions,
+// and the Garden resource if no Garden currently exists. This blocks operator startup until these resources
+// are recreated; their reconciliation runs once the operator controllers start.
 func RestoreGardenState(ctx context.Context, log logr.Logger, c client.Client, gardenNamespace string) error {
 	gardenList := &operatorv1alpha1.GardenList{}
 	if err := c.List(ctx, gardenList, client.Limit(1)); err != nil {
@@ -67,6 +68,22 @@ func RestoreGardenState(ctx context.Context, log logr.Logger, c client.Client, g
 		return fmt.Errorf("failed restoring secrets from garden-state: %w", err)
 	}
 	log.Info("Restored secrets from garden-state")
+
+	// Restore operator Extension definitions before creating the Garden. Its reconciliation waits for
+	// runtime extension controllers, which cannot be installed without these definitions.
+	for _, extension := range stateData.OperatorExtensions {
+		if err := client.IgnoreAlreadyExists(c.Create(ctx, &operatorv1alpha1.Extension{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:        extension.Name,
+				Labels:      extension.Labels,
+				Annotations: extension.Annotations,
+			},
+			Spec: extension.Spec,
+		})); err != nil {
+			return fmt.Errorf("failed restoring operator Extension %q from garden-state: %w", extension.Name, err)
+		}
+	}
+	log.Info("Restored operator Extension definitions from garden-state")
 
 	garden, err := createGardenFromState(ctx, c, stateData)
 	if err != nil {
@@ -165,7 +182,7 @@ func patchGardenStatus(ctx context.Context, c client.Client, garden *operatorv1a
 
 // EncodeGardenStateSecret encodes the garden-state into a Secret. This is called at the end of
 // garden reconciliation to persist the current state.
-func EncodeGardenStateSecret(garden *operatorv1alpha1.Garden, secrets []gardencorev1beta1.GardenerResourceData, extensions []gardencorev1beta1.ExtensionResourceState, resources []gardencorev1beta1.ResourceData) (*corev1.Secret, error) {
+func EncodeGardenStateSecret(garden *operatorv1alpha1.Garden, secrets []gardencorev1beta1.GardenerResourceData, operatorExtensions []operatorv1alpha1.Extension, extensions []gardencorev1beta1.ExtensionResourceState, resources []gardencorev1beta1.ResourceData) (*corev1.Secret, error) {
 	stateData := &operatorv1alpha1.GardenState{
 		Gardener: secrets,
 		Garden: operatorv1alpha1.GardenStateGarden{
@@ -178,6 +195,18 @@ func EncodeGardenStateSecret(garden *operatorv1alpha1.Garden, secrets []gardenco
 		},
 		Extensions: extensions,
 		Resources:  resources,
+	}
+
+	for _, extension := range operatorExtensions {
+		if extension.DeletionTimestamp != nil {
+			continue
+		}
+		stateData.OperatorExtensions = append(stateData.OperatorExtensions, operatorv1alpha1.GardenStateExtension{
+			Name:        extension.Name,
+			Labels:      extension.Labels,
+			Annotations: extension.Annotations,
+			Spec:        extension.Spec,
+		})
 	}
 
 	raw, err := json.Marshal(stateData)

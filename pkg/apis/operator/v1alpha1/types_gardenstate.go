@@ -23,6 +23,9 @@ type GardenState struct {
 	Gardener []gardencorev1beta1.GardenerResourceData `json:"gardener,omitempty"`
 	// Garden holds the garden resource state needed for restore.
 	Garden GardenStateGarden `json:"garden,omitempty"`
+	// OperatorExtensions holds the operator Extension definitions needed to reinstall extension controllers during restore.
+	// +optional
+	OperatorExtensions []GardenStateExtension `json:"operatorExtensions,omitempty"`
 	// Extensions holds the state of custom resources reconciled by extension controllers in the runtime cluster.
 	// +optional
 	Extensions []gardencorev1beta1.ExtensionResourceState `json:"extensions,omitempty"`
@@ -52,6 +55,22 @@ type GardenStateGarden struct {
 	// Status is the status of the Garden resource.
 	// +optional
 	Status GardenStatus `json:"status,omitempty"`
+}
+
+// GardenStateExtension contains an operator Extension definition persisted in a GardenState.
+// Like GardenStateGarden, it uses explicit metadata fields to avoid pruning nested ObjectMeta.
+// Status is not persisted so that installation and required conditions are recomputed during restore.
+type GardenStateExtension struct {
+	// Name is the name of the Extension resource.
+	Name string `json:"name"`
+	// Labels are the labels of the Extension resource.
+	// +optional
+	Labels map[string]string `json:"labels,omitempty"`
+	// Annotations are the annotations of the Extension resource.
+	// +optional
+	Annotations map[string]string `json:"annotations,omitempty"`
+	// Spec is the spec of the Extension resource.
+	Spec ExtensionSpec `json:"spec"`
 }
 
 // GetGardenerResources returns the list of gardener resources to be restored from the GardenState.
